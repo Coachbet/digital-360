@@ -11,7 +11,7 @@ name: digital360
 services:
   web:
     build:
-      context: ../frontend
+      context: "../Portail-front end"
     restart: unless-stopped
     ports:
       - "80:80"
@@ -33,7 +33,7 @@ services:
 
   backend:
     build:
-      context: ../backend
+      context: ../Portail-backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -50,6 +50,8 @@ services:
       N8N_WEBHOOK_URL: http://n8n:5678/webhook/auto-review
       BACKEND_PUBLIC_URL: http://backend:8000
       SECRET_KEY: ${SECRET_KEY}
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v23.0}
       FRONTEND_ORIGIN: https://${APP_DOMAIN}
     depends_on:
       postgres:
