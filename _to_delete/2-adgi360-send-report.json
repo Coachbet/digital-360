@@ -1,0 +1,176 @@
+{
+  "name": "adgi360 — Envoi du rapport (Gmail)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-report",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "webhook-send-report",
+      "name": "Webhook send-report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        300
+      ],
+      "webhookId": "adgi360-send-report",
+      "notes": "Appelé par le backend uniquement quand un humain a validé le rapport dans le portail. Rien ne part automatiquement."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Contexte d'envoi transmis par le backend après validation humaine.\nconst body = $input.first().json.body ?? $input.first().json;\n\nif (!body.recipient_email) {\n  throw new Error('Aucun destinataire fourni pour la review ' + body.review_id);\n}\nif (!body.report?.storage_key) {\n  throw new Error('Aucun rapport associé à la review ' + body.review_id);\n}\n\nreturn [{ json: {\n  review_id: body.review_id,\n  client_name: body.client?.name || 'Client',\n  recipient_email: body.recipient_email,\n  additional_info: body.additional_info || '',\n  storage_key: body.report.storage_key,\n  filename: body.report.filename || 'rapport.pptx',\n  bucket: 'adgi360-files',\n} }];"
+      },
+      "id": "prepare-send",
+      "name": "Préparer l'envoi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:9000/{{ $json.bucket }}/{{ $json.storage_key }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "download-report",
+      "name": "Récupérer le rapport (MinIO)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -280,
+        300
+      ],
+      "notes": "MinIO est joint via host.docker.internal (n8n est conteneurise). Aucune authentification : le bucket adgi360-files est en acces anonyme pour le developpement local. Avant tout deploiement, retablir un credential S3 et retirer l'acces public."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Corps du courriel. Adapte le texte à ta façon d'écrire aux clients.\nconst d = $('Préparer l\\'envoi').first().json;\nconst mois = new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });\n\nconst html = `\n<div style=\"font-family:Inter,Helvetica,Arial,sans-serif;color:#16181F;line-height:1.6\">\n  <p>Bonjour,</p>\n  <p>Vous trouverez ci-joint votre rapport de performance — <strong>${mois}</strong>.</p>\n  ${d.additional_info ? `<p>${d.additional_info}</p>` : ''}\n  <p>Nous restons disponibles pour en discuter.</p>\n  <p style=\"margin-top:24px\">\n    Bien cordialement,<br>\n    <strong>L'équipe ADIGI<span style=\"color:#E5006F\">360</span></strong><br>\n    <span style=\"color:#6B7280;font-size:13px\">Grandissons ensemble !</span>\n  </p>\n</div>`;\n\nreturn [{\n  json: { ...d, subject: `Votre rapport de performance — ${mois}`, html },\n  binary: $input.first().binary,\n}];"
+      },
+      "id": "compose-email",
+      "name": "Composer le courriel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipient_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          }
+        }
+      },
+      "id": "gmail-send",
+      "name": "Gmail — Envoyer",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        160,
+        300
+      ],
+      "notes": "⚠️ À COMPLÉTER : sélectionner un credential « Gmail OAuth2 API ». Créer un ID client OAuth (type Application Web) dans Google Cloud, activer l'API Gmail, et coller l'URL de redirection fournie par n8n."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  status: 'sent',\n  review_id: $('Préparer l\\'envoi').first().json.review_id,\n  recipient: $('Préparer l\\'envoi').first().json.recipient_email,\n} }];"
+      },
+      "id": "done-send",
+      "name": "Terminé",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook send-report": {
+      "main": [
+        [
+          {
+            "node": "Préparer l'envoi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer l'envoi": {
+      "main": [
+        [
+          {
+            "node": "Récupérer le rapport (MinIO)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Récupérer le rapport (MinIO)": {
+      "main": [
+        [
+          {
+            "node": "Composer le courriel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer le courriel": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Envoyer": {
+      "main": [
+        [
+          {
+            "node": "Terminé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "adgi360"
+    }
+  ]
+}

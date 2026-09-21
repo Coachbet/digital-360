@@ -1,0 +1,60 @@
+# Reverse proxy et terminaison TLS de Digital 360.
+#
+# Les noms de domaine viennent de l'environnement (fichier .env.prod), ce qui
+# permet d'utiliser le même fichier en préproduction et en production.
+# Caddy demande les certificats Let's Encrypt au premier démarrage : les DNS
+# doivent déjà pointer sur le serveur, sinon la validation échoue.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# --- Application : front statique + API sur le même domaine
+# Même origine pour les deux : pas de préflight CORS, et le cookie/jeton n'a
+# jamais à traverser un domaine tiers.
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+
+		# Les assets Vite portent un hash dans leur nom : ils peuvent être mis
+		# en cache indéfiniment. index.html, lui, ne doit jamais l'être, sinon
+		# un déploiement ne serait pas visible avant expiration du cache.
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+
+		# Application à page unique : toute route inconnue rend index.html et
+		# c'est react-router qui décide.
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# --- Stockage des fichiers
+# Exposé publiquement parce que les URL pré-signées sont téléchargées
+# directement par le navigateur et par n8n. Le bucket reste privé : sans
+# signature valide, MinIO répond 403.
+{$FILES_DOMAIN} {
+	reverse_proxy minio:9000
+}
+
+# --- n8n
+# L'éditeur de workflows est une interface d'administration : il est protégé
+# par l'authentification intégrée de n8n, réglée dans .env.prod.
+{$N8N_DOMAIN} {
+	reverse_proxy n8n:5678
+}

@@ -1,0 +1,64 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* --------------------------------------------------------------------
+       Digital 360 — marine profond + violet.
+       Le violet porte l'identité du produit ; les couleurs d'une agence
+       (définies dans son profil) n'habillent que ses livrables, jamais
+       l'interface, pour que le produit reste reconnaissable partout.
+       -------------------------------------------------------------------- */
+    --background: 240 24% 98%;
+    --foreground: 242 40% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 242 40% 14%;
+
+    --primary: 252 85% 62%;
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 252 100% 97%;
+    --primary-muted: 252 60% 92%;
+
+    /* Marine : bandeaux, pages sombres, texte fort */
+    --ink: 242 44% 15%;
+    --ink-foreground: 0 0% 100%;
+
+    --muted: 240 20% 96%;
+    --muted-foreground: 240 8% 46%;
+
+    --border: 244 22% 91%;
+    --input: 244 22% 91%;
+    --ring: 252 85% 62%;
+
+    --success: 158 64% 38%;
+    --warning: 32 95% 48%;
+    --danger: 352 76% 52%;
+
+    /* Séries de graphiques : violet en tête, puis des teintes qui restent
+       distinguables en niveaux de gris et pour les daltonismes courants. */
+    --chart-1: 252 85% 62%;
+    --chart-2: 199 89% 48%;
+    --chart-3: 262 52% 47%;
+    --chart-4: 173 58% 39%;
+    --chart-5: 31 90% 56%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Cible de focus visible au clavier, sans halo permanent à la souris. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}

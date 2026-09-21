@@ -1,0 +1,252 @@
+{
+  "name": "adgi360 — Auto Review",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-review",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "webhook-auto-review",
+      "name": "Webhook auto-review",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        300
+      ],
+      "webhookId": "adgi360-auto-review",
+      "notes": "Appelé par le backend quand un utilisateur lance une review depuis le portail."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Contexte de la review + réglages du workflow.\n// C'est le seul endroit à modifier pour changer de modèle IA.\nconst OLLAMA_URL = 'http://host.docker.internal:11434';\nconst OLLAMA_MODEL = 'llama3.1';  // doit être déjà téléchargé : ollama pull llama3.1\n\nconst body = $input.first().json.body ?? $input.first().json;\n\nif (!body.review_id) {\n  throw new Error('Payload invalide : review_id manquant');\n}\nconst files = body.source_files || [];\nif (files.some((f) => !f.download_url)) {\n  throw new Error('Payload obsolète : le portail doit fournir download_url par fichier');\n}\nif (files.length === 0) {\n  throw new Error('Aucun fichier source pour la review ' + body.review_id);\n}\n\nconst context = {\n  review_id: body.review_id,\n  client_name: body.client?.name || 'Client',\n  client_type_label: body.client_type_label || body.client_type || '',\n  additional_info: body.additional_info || '',\n  render_callback_url: body.render_callback_url,\n  period: files[0]?.period || '',\n  bucket: 'adgi360-files',\n  ollama_url: OLLAMA_URL,\n  ollama_model: OLLAMA_MODEL,\n};\n\n// Un item par fichier : les nœuds suivants les traitent en parallèle.\nreturn files.map((file) => ({ json: { ...context, file } }));"
+      },
+      "id": "prepare-context",
+      "name": "Préparer le contexte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.file.download_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "download-source",
+      "name": "Télécharger le fichier source",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -440,
+        300
+      ],
+      "notes": "URL pré-signée fournie par le portail (valable 30 min). Le bucket reste privé : aucun accès anonyme requis.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "id": "extract-file",
+      "name": "Extraire les données",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        300
+      ],
+      "notes": "Passer l'opération à « csv » si les exports sont en CSV. Pour d'autres formats, remplacer ce nœud."
+    },
+    {
+      "parameters": {
+        "jsCode": "// L'IA ne peut pas ingérer un export complet : on lui envoie une synthèse\n// compacte — colonnes, nombre de lignes, totaux numériques et un échantillon.\n// C'est suffisant pour rédiger un rapport, et ça tient dans le contexte du modèle.\nconst ctx = $('Préparer le contexte').first().json;\nconst rows = $input.all().map((item) => item.json).filter(Boolean);\n\nif (rows.length === 0) {\n  throw new Error('Aucune ligne extraite des fichiers sources');\n}\n\nconst columns = Object.keys(rows[0]);\nconst totals = {};\nfor (const col of columns) {\n  const nums = rows\n    .map((r) => Number(String(r[col]).replace(/[^0-9.,-]/g, '').replace(',', '.')))\n    .filter((n) => Number.isFinite(n));\n  if (nums.length >= rows.length * 0.6 && nums.length > 0) {\n    totals[col] = {\n      somme: Number(nums.reduce((a, b) => a + b, 0).toFixed(2)),\n      moyenne: Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)),\n      min: Math.min(...nums),\n      max: Math.max(...nums),\n    };\n  }\n}\n\nconst resume = {\n  nombre_de_lignes: rows.length,\n  colonnes: columns,\n  totaux_numeriques: totals,\n  echantillon: rows.slice(0, 15),\n};\n\nreturn [{ json: { ...ctx, resume } }];"
+      },
+      "id": "summarise",
+      "name": "Résumer les données",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.ollama_url }}/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.ollama_model,\n  stream: false,\n  format: 'json',\n  options: { temperature: 0.4 },\n  prompt: `Tu es analyste chez ADIGI360, une agence de marketing digital. Rédige en français le plan d'un rapport de performance client, en t'appuyant uniquement sur les données fournies. N'invente aucun chiffre.\\n\\nClient : ${$json.client_name}\\nType de client : ${$json.client_type_label}\\nPériode : ${$json.period}\\nConsignes de l'équipe : ${$json.additional_info || 'aucune'}\\n\\nDonnées :\\n${JSON.stringify($json.resume)}\\n\\nRéponds UNIQUEMENT avec un objet JSON de cette forme exacte :\\n{\"title\": \"...\", \"subtitle\": \"...\", \"slides\": [\\n  {\"layout\": \"kpis\", \"title\": \"Chiffres clés\", \"kpis\": [{\"label\": \"...\", \"value\": \"...\", \"delta\": \"...\"}], \"bullets\": [\"...\"]},\\n  {\"layout\": \"bullets\", \"title\": \"Analyse\", \"subtitle\": \"...\", \"bullets\": [\"...\", \"...\"]},\\n  {\"layout\": \"recommendations\", \"title\": \"Recommandations\", \"items\": [{\"title\": \"...\", \"detail\": \"...\"}]}\\n]}\\n\\nRègles : 3 à 4 KPI maximum, 4 à 6 puces maximum par diapositive, 3 recommandations maximum. Les valeurs des KPI sont des chaînes déjà formatées (ex. \"18 400 $\", \"4,8x\"). Reste factuel et concis.`\n}) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "ollama",
+      "name": "Analyse IA (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Appel direct à l'API Ollama : aucun credential à créer. Le modèle doit être téléchargé au préalable : docker exec -it n8n-ollama ollama pull llama3.1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ollama renvoie le JSON du modèle dans le champ « response » (chaîne).\n// On le parse ici, avec un repli lisible si le modèle s'écarte du format :\n// mieux vaut un rapport minimal qu'une exécution en échec.\nconst ctx = $('Résumer les données').first().json;\nconst raw = $input.first().json.response ?? '';\n\nlet plan;\ntry {\n  plan = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  plan = match ? JSON.parse(match[0]) : null;\n}\n\nif (!plan || !Array.isArray(plan.slides) || plan.slides.length === 0) {\n  plan = {\n    title: `Rapport de performance — ${ctx.client_name}`,\n    subtitle: ctx.period,\n    slides: [{\n      layout: 'bullets',\n      title: 'Synthèse',\n      bullets: [\n        `${ctx.resume.nombre_de_lignes} lignes analysées sur la période ${ctx.period}.`,\n        \"L'analyse automatique n'a pas produit de plan exploitable — à compléter manuellement.\",\n      ],\n    }],\n  };\n}\n\nreturn [{ json: { review_id: ctx.review_id, render_callback_url: ctx.render_callback_url, plan } }];"
+      },
+      "id": "parse-plan",
+      "name": "Valider le plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.render_callback_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.plan) }}",
+        "options": {}
+      },
+      "id": "callback",
+      "name": "Renvoyer le plan au portail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "notes": "Le backend génère le PowerPoint aux couleurs adgi360, l'archive dans MinIO et bascule la review en « à relire »."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  status: 'ok',\n  review_id: $('Valider le plan').first().json.review_id,\n  fichier: $input.first().json.report_filename,\n  message: 'Rapport généré — en attente de relecture dans le portail',\n} }];"
+      },
+      "id": "done",
+      "name": "Terminé",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook auto-review": {
+      "main": [
+        [
+          {
+            "node": "Préparer le contexte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer le contexte": {
+      "main": [
+        [
+          {
+            "node": "Télécharger le fichier source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Télécharger le fichier source": {
+      "main": [
+        [
+          {
+            "node": "Extraire les données",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire les données": {
+      "main": [
+        [
+          {
+            "node": "Résumer les données",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Résumer les données": {
+      "main": [
+        [
+          {
+            "node": "Analyse IA (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyse IA (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Valider le plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valider le plan": {
+      "main": [
+        [
+          {
+            "node": "Renvoyer le plan au portail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renvoyer le plan au portail": {
+      "main": [
+        [
+          {
+            "node": "Terminé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "adgi360"
+    }
+  ]
+}

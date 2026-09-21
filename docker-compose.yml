@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: adgi360-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adgi360
+      POSTGRES_PASSWORD: adgi360
+      POSTGRES_DB: adgi360
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adgi360"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: adgi360-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: adgi360
+      MINIO_ROOT_PASSWORD: adgi360secret
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Crée automatiquement le bucket au démarrage, puis s'arrête.
+  minio-init:
+    image: minio/mc:latest
+    container_name: adgi360-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 adgi360 adgi360secret;
+      mc mb --ignore-existing local/adgi360-files;
+      mc anonymous set public local/adgi360-files || mc policy set public local/adgi360-files;
+      echo 'Bucket adgi360-files prêt (accès anonyme activé pour le développement local)';
+      "
+
+volumes:
+  postgres_data:
+  minio_data:

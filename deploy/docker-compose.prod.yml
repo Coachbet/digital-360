@@ -1,0 +1,145 @@
+# Pile de production Digital 360 — un seul serveur, tout en conteneurs.
+#
+# Principe : rien n'est publié sur Internet sauf Caddy (80/443). Postgres,
+# MinIO, le backend et n8n ne sont joignables que par le réseau interne Docker.
+# Un scan de ports sur le serveur ne trouve donc que le reverse proxy.
+#
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod up -d --build
+
+name: digital360
+
+services:
+  web:
+    build:
+      context: ../frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      FILES_DOMAIN: ${FILES_DOMAIN}
+      N8N_DOMAIN: ${N8N_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data contient les certificats : sans ce volume, chaque
+      # redémarrage redemanderait des certificats à Let's Encrypt et
+      # atteindrait vite la limite hebdomadaire.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Le backend parle à MinIO en interne…
+      S3_ENDPOINT_URL: http://minio:9000
+      # …mais signe pour le navigateur avec le domaine public.
+      S3_PUBLIC_ENDPOINT_URL: https://${FILES_DOMAIN}
+      # n8n est dans le même réseau : il peut utiliser l'adresse interne.
+      S3_N8N_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/auto-review
+      BACKEND_PUBLIC_URL: http://backend:8000
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_ORIGIN: https://${APP_DOMAIN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Sans cela, MinIO renvoie des redirections vers son adresse interne
+      # quand il est servi derrière un reverse proxy.
+      MINIO_SERVER_URL: https://${FILES_DOMAIN}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    # Le bucket reste PRIVÉ : contrairement au poste de développement, aucun
+    # « mc anonymous set public » ici. n8n et le navigateur accèdent aux
+    # fichiers par des URL pré-signées émises par le backend.
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/${S3_BUCKET};
+      mc anonymous set none local/${S3_BUCKET};
+      echo 'Bucket ${S3_BUCKET} prêt (privé)';
+      "
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      N8N_HOST: ${N8N_DOMAIN}
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://${N8N_DOMAIN}/
+      N8N_PORT: 5678
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+      # Chiffre les identifiants stockés par n8n. À conserver : la perdre rend
+      # les credentials enregistrés illisibles.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      GENERIC_TIMEZONE: America/Toronto
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  # IA locale. Facultative : démarrée seulement avec --profile ollama.
+  # Compter au moins 8 Go de RAM libres pour un modèle 8B quantifié, et
+  # accepter une génération lente sans GPU (quelques minutes par rapport).
+  # L'alternative documentée dans DEPLOIEMENT.md est d'appeler une API.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["ollama"]
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  minio_data:
+  n8n_data:
+  ollama_data:

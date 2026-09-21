@@ -1,0 +1,9 @@
+# Sans ce fichier, node_modules (plusieurs centaines de Mo) part dans le
+# contexte de build à chaque fois : la construction devient très lente.
+node_modules
+dist
+.env*
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.DS_Store

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "types": ["node"],
+    // Un projet composite ne peut pas désactiver l'émission : on la range donc
+    // hors du dossier source. Sinon `tsc -b` dépose un vite.config.js à côté du
+    // .ts, et Vite charge le .js en priorité — toute modification du .ts devient
+    // alors sans effet, sans aucun message d'erreur.
+    "outDir": "./node_modules/.tmp/tsc-node",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
+  },
+  "include": ["vite.config.ts"]
+}
