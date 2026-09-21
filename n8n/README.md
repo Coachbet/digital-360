@@ -1,93 +1,47 @@
-# Workflow n8n du portail adgi360
+# Workflows n8n pour le VPS Digital 360
 
-Un seul workflow à importer dans ton instance n8n locale (http://localhost:5678) : `1-adgi360-auto-review.json`.
+## Importation
+Dans n8n sur le VPS, créer un workflow puis menu ⋯ > Import from File.
+Importer séparément :
+- `0-test-ollama-vps.json` : lancer Execute Workflow, vérifier le champ response.
+- `1-adgi360-auto-review.json` : enregistrer puis publier/activer.
+Ne publier qu'un seul workflow utilisant le chemin POST `auto-review`.
 
-**Aucun credential à créer.** Ni MinIO, ni Gmail, ni Ollama : tous les appels passent par HTTP sans authentification, sur ta machine.
+## Configuration
+Aucun credential n8n à ajouter : Ollama est joint à http://ollama:11434,
+MinIO utilise les URL temporaires signées et le rappel backend porte un jeton HMAC.
+Le modèle attendu est llama3.2:3b.
+Le backend doit définir N8N_WEBHOOK_URL=http://n8n:5678/webhook/auto-review.
 
-## Importer
+## Premier essai
+Créer un client dans le portail, déposer un export Excel .xlsx avec une ligne
+d'en-têtes puis des lignes de données, sélectionner ce fichier dans Rapports
+et lancer la génération. Suivre l'exécution dans n8n > Executions.
+Le backend génère ensuite le PPTX et affiche « À relire ».
 
-Dans n8n : menu **⋯** en haut à droite → **Import from File…** → sélectionne `1-adgi360-auto-review.json`. Puis **Publish** pour l'activer — un workflow inactif ne répond que sur une URL de test, et le backend recevrait une 404.
+Cette version accepte seulement les fichiers .xlsx (première feuille par défaut).
+Elle transmet au modèle un échantillon plafonné à 30 lignes et 30 colonnes,
+sans calcul de totaux sur la période. Ce n'est pas une analyse exhaustive.
+Les régies publicitaires et les autres formats ne sont pas raccordés à ce flux.
+Le workflow utilise les adresses Docker du VPS et ne convient pas tel quel
+à une instance n8n Cloud.
 
-## Prérequis : le modèle Ollama
+## Erreurs
+Une réponse IA invalide arrête l'exécution, sans produire un faux rapport.
+Consulter le nœud rouge dans Executions. Le backend ne possède pas encore
+de rappel d'échec : une review peut rester en processing si n8n échoue.
+Après correction, lancer une nouvelle review depuis le portail.
+Ne pas publier de captures contenant les URL signées ou le token de rappel.
 
-Le workflow appelle ton conteneur `n8n-ollama`. Le modèle doit être téléchargé une fois :
-
+## Déploiement de la correction backend
+AutoReviewCreate accepte désormais client_type avec la valeur par défaut other :
+le formulaire actuel n'envoie pas ce champ, mais le routeur en a besoin.
+Publier les modifications Git puis, sur le VPS, faire git pull et :
 ```bash
-docker exec -it n8n-ollama ollama pull llama3.1
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod up -d --build backend
 ```
 
-Pour changer de modèle, édite le nœud **« Préparer le contexte »** — la constante `OLLAMA_MODEL` est en haut du code, c'est le seul endroit à modifier.
-
-## Ce que fait le workflow
-
-```
-Portail ──► Webhook ──► Récupère toutes les sources cochées
-                            │  documents + régies publicitaires
-                            ▼
-                     Normalise et résume les données
-                            │
-                            ▼
-                     Ollama rédige le plan du rapport (JSON)
-                            │
-                            ▼
-                     POST du plan vers le backend
-                            │
-                            ▼
-              Le backend génère le PowerPoint et l'archive
-                            │
-                            ▼
-                 Le portail affiche « À relire »
-```
-
-Le **backend** produit le fichier PowerPoint, pas n8n : n8n n'a pas de nœud PPTX, et le backend est déjà en Python avec `python-pptx`. n8n se concentre sur ce qu'il fait bien — orchestrer et appeler l'IA.
-
-**Aucun mail n'est envoyé.** Le rapport se relit puis se valide dans le portail, et se télécharge de là.
-
-## Points d'adaptation
-
-**Format des fichiers sources** — le backend normalise CSV, Excel, PDF, PowerPoint, texte, Markdown et JSON avant leur arrivée dans n8n. Le workflow n'est donc plus bloqué sur Excel.
-
-**Régies publicitaires** — Meta/Instagram, Google Ads, TikTok Ads, LinkedIn Ads et Snap Ads sont récupérés par les URL temporaires de `advertising_sources`. Les jetons restent chiffrés dans le backend : n8n ne reçoit jamais les credentials.
-
-**Qualité du rapport** — tout se joue dans le prompt du nœud « Analyse IA (Ollama) ». Le modèle reçoit un résumé des colonnes, statistiques, textes extraits et KPI publicitaires plutôt que les exports bruts. Le renderer applique ensuite le gabarit ADIGI360 de référence.
-
-**Robustesse** — si le modèle s'écarte du format JSON attendu, le nœud « Valider le plan » retombe sur un rapport minimal plutôt que d'échouer. De même côté backend : chaque champ manquant a une valeur de repli. Un rapport imparfait vaut mieux qu'une exécution en erreur.
-
-## Mises en page disponibles
-
-Le plan JSON produit par l'IA accepte cinq `layout`, tous rendus aux couleurs adgi360 :
-
-| `layout` | Rendu | Champs utilisés |
-|---|---|---|
-| `kpis` | Cartes de chiffres clés | `kpis` (label, value, delta), `bullets` |
-| `bullets` | Deux colonnes, puces + visuel | `bullets`, `subtitle` |
-| `trend` | Courbe éditable + interprétation | `categories`, `series`, `bullets` |
-| `table` | Tableau détaillé éditable | `items` |
-| `recommendations` | Liste numérotée | `items` (title, detail) |
-
-Une valeur inconnue retombe sur `bullets`. Le deck ajoute automatiquement une couverture sombre et une page de fin — inutile de les demander au modèle.
-
-## Contrat d'appel
-
-Le backend envoie sur le webhook :
-
-```json
-{
-  "review_id": "uuid",
-  "client": { "id": "uuid", "name": "Acme", "contact_email": "..." },
-  "additional_info": "texte libre",
-  "source_files": [
-    { "id": "uuid", "filename": "export.xlsx", "period": "2026-09", "retrieval_url": "http://..." }
-  ],
-  "advertising_sources": [
-    { "platform": "google_ads", "retrieval_url": "http://..." }
-  ],
-  "render_callback_url": "http://host.docker.internal:8001/api/v1/auto-review/<review_id>/render"
-}
-```
-
-L'URL de rappel est fournie dans le payload : rien n'est codé en dur dans le workflow.
-
-## Avant tout déploiement
-
-L'accès anonyme au bucket MinIO peut maintenant être retiré en production (`mc anonymous set none local/adgi360-files`) : n8n passe par les URL internes signées du backend et n'a besoin d'aucun credential S3.
+## Validation
+Les fichiers JSON et le code des nœuds sont vérifiés localement.
+La validation de bout en bout nécessite l'import dans votre instance n8n
+et un lancement réel depuis le portail.

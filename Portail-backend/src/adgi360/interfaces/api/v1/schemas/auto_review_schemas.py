@@ -12,6 +12,7 @@ class ClientTypeOut(BaseModel):
 
 class AutoReviewCreate(BaseModel):
     client_id: str
+    client_type: str = "other"
     data_file_ids: list[str] = Field(default_factory=list)
     selected_platforms: list[str] = Field(default_factory=list)
     additional_info: str | None = None
