@@ -22,6 +22,10 @@ RUN python -m venv /opt/venv \
 
 FROM python:3.11-slim
 
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libreoffice-impress fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
 # Un utilisateur non privilégié : si le processus est compromis, il n'a aucun
 # droit sur l'hôte ni sur les volumes montés en lecture seule.
 RUN useradd --create-home --uid 10001 digital360

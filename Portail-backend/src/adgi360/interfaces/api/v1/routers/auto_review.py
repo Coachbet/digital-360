@@ -19,6 +19,7 @@ from adgi360.interfaces.api.v1.schemas.auto_review_schemas import (
     ClientTypeOut,
     RenderReportRequest,
     ReportDownloadOut,
+    ReportPreviewOut,
 )
 from adgi360.shared.exceptions import ExternalServiceError, NotFoundError, ValidationError
 
@@ -48,6 +49,8 @@ async def launch_auto_review(
     n8n: N8nClient = Depends(get_n8n_client),
     storage: FileStorage = Depends(get_storage),
 ) -> ReviewRequestModel:
+    if payload.selected_platforms:
+        raise HTTPException(422, "L'analyse des plateformes publicitaires n'est pas encore disponible")
     use_case = LaunchAutoReviewUseCase(session, n8n, storage)
     try:
         return await use_case.execute(
@@ -153,3 +156,44 @@ async def download_report(
         filename=review.report_filename or "rapport.pptx",
         expires_in=3600,
     )
+
+
+@router.get("/{review_id}/preview", response_model=ReportPreviewOut)
+async def preview_report(
+    review_id: str,
+    user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+    storage: FileStorage = Depends(get_storage),
+) -> ReportPreviewOut:
+    review = await _get_owned_review(review_id, user.organization_id, session)
+    if not review.report_storage_key:
+        raise HTTPException(404, "Aucun rapport disponible")
+    key = review.report_storage_key.rsplit(".", 1)[0] + ".pdf"
+    try:
+        objects = await storage.list_keys(key)
+        if not any(obj["key"] == key for obj in objects):
+            raise HTTPException(404, "Aperçu PDF indisponible pour ce rapport. Téléchargez le PowerPoint.")
+        url = await storage.presigned_url(key)
+    except ExternalServiceError as exc:
+        raise HTTPException(502, "Le stockage est momentanément indisponible") from exc
+    return ReportPreviewOut(url=url, filename=(review.report_filename or "rapport.pptx").rsplit(".", 1)[0] + ".pdf", expires_in=3600)
+
+
+@router.delete("/{review_id}", status_code=204)
+async def delete_review(
+    review_id: str,
+    user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+    storage: FileStorage = Depends(get_storage),
+) -> None:
+    review = await _get_owned_review(review_id, user.organization_id, session)
+    if review.status in (ReviewStatus.PENDING.value, ReviewStatus.PROCESSING.value):
+        raise HTTPException(409, "Attendez la fin de la génération avant de supprimer le rapport")
+    if review.report_storage_key:
+        try:
+            await storage.delete(review.report_storage_key)
+            await storage.delete(review.report_storage_key.rsplit(".", 1)[0] + ".pdf")
+        except ExternalServiceError as exc:
+            raise HTTPException(502, "Impossible de supprimer les fichiers du rapport") from exc
+    await session.delete(review)
+    await session.commit()

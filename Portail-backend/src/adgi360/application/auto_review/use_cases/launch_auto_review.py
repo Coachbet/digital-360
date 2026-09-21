@@ -56,11 +56,14 @@ class LaunchAutoReviewUseCase:
                 # Le filtre par agence empêche de rattacher à sa review le
                 # fichier d'une autre organisation en devinant son identifiant.
                 DataFileModel.organization_id == organization_id,
+                DataFileModel.client_id == client_id,
             )
         )
         files = list(result.scalars().all())
         if len(files) != len(data_file_ids):
             raise ValidationError("Certains fichiers sélectionnés sont introuvables")
+        if any(not f.filename.lower().endswith(".xlsx") for f in files):
+            raise ValidationError("L'analyse accepte actuellement uniquement les fichiers Excel .xlsx")
 
         review = ReviewRequestModel(
             organization_id=organization_id,
@@ -112,6 +115,8 @@ class LaunchAutoReviewUseCase:
         }
 
         try:
+            review.status = ReviewStatus.PROCESSING.value
+            await self._session.commit()
             await self._n8n.trigger_auto_review(payload)
         except ExternalServiceError as exc:
             review.status = ReviewStatus.FAILED.value
@@ -120,7 +125,5 @@ class LaunchAutoReviewUseCase:
             await self._session.refresh(review)
             raise
 
-        review.status = ReviewStatus.PROCESSING.value
-        await self._session.commit()
         await self._session.refresh(review)
         return review

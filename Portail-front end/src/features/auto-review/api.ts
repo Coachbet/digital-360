@@ -29,6 +29,7 @@ export const autoReviewApi = {
 
   launch: (payload: {
     client_id: string;
+    client_type?: string;
     data_file_ids: string[];
     selected_platforms: string[];
     additional_info?: string | null;

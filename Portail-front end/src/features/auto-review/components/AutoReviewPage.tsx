@@ -7,6 +7,7 @@ import ReviewForm from "@/features/auto-review/components/ReviewForm";
 import { PageHeader } from "@/shared/components/AppLayout";
 import { Card, CardContent } from "@/shared/components/ui/Card";
 import { Label, Select } from "@/shared/components/ui/Field";
+import { Button } from "@/shared/components/ui/Button";
 
 /** Statuts qui évoluent sans action de l'utilisateur : n8n travaille encore. */
 const IN_PROGRESS = new Set(["pending", "processing"]);
@@ -56,7 +57,8 @@ export default function AutoReviewPage() {
 
     const timer = setInterval(() => {
       if (startedAt.current !== null && Date.now() - startedAt.current > MAX_POLL_MS) {
-        clearInterval(timer);
+        setError("L’analyse prend plus de temps que prévu. Clique sur Actualiser les rapports et vérifie les exécutions n8n si elle reste bloquée.");
+        startedAt.current = null;
         return;
       }
       // Onglet en arrière-plan : inutile de solliciter le serveur.
@@ -73,6 +75,7 @@ export default function AutoReviewPage() {
         description="Lance l’analyse d’un rapport, relis le PowerPoint produit, puis valide-le. Rien n’est envoyé : le fichier se télécharge depuis le portail."
         action={
           <div>
+            <Button variant="secondary" onClick={() => { setError(null); startedAt.current = Date.now(); void refresh(); }}>Actualiser les rapports</Button>
             <Label htmlFor="reports-client">Afficher les rapports de</Label>
             <Select
               id="reports-client"

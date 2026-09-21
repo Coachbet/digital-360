@@ -46,7 +46,7 @@ export default function OrganizationPage() {
       .catch((e) => setError(e.message));
   }, []);
 
-  if (!profile) return null;
+  if (!profile) return <div role={error ? "alert" : "status"} className="p-6">{error || "Chargement de l’agence…"}<Button variant="secondary" onClick={() => { setError(null); organizationApi.profile().then(setProfile).catch(e => setError(e.message)); }}>Réessayer</Button></div>;
 
   const missingLegal = LEGAL_FIELDS.filter(
     ({ key }) => !String(profile[key] ?? "").trim(),

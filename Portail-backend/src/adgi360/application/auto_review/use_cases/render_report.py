@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,7 +78,11 @@ class RenderReportUseCase:
             pptx_bytes,
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         )
-        preview_bytes = await asyncio.to_thread(render_pptx_preview_pdf, pptx_bytes)
+        try:
+            preview_bytes = await asyncio.to_thread(render_pptx_preview_pdf, pptx_bytes)
+        except Exception:
+            logging.getLogger(__name__).exception("Aperçu PDF indisponible")
+            preview_bytes = None
         if preview_bytes:
             await self._storage.upload(
                 f"{key.rsplit('.', 1)[0]}.pdf", preview_bytes, "application/pdf"

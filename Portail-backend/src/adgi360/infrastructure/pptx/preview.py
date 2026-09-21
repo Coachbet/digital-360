@@ -10,7 +10,7 @@ from adgi360.infrastructure.config.settings import settings
 
 
 def _binary() -> str | None:
-    configured = settings.libreoffice_binary
+    configured = getattr(settings, "libreoffice_binary", None)
     if configured and (Path(configured).exists() or shutil.which(configured)):
         return configured
     for candidate in (

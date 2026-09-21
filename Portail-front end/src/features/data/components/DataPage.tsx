@@ -2,6 +2,7 @@ import { Download, FileText, FolderPlus, Trash2, Upload } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
 import { Client, clientsApi } from "@/features/clients/api";
+import ClientCreateForm from "@/features/clients/ClientCreateForm";
 import { DataFile, Period, dataApi } from "@/features/data/api";
 import { PageHeader } from "@/shared/components/AppLayout";
 import { Button } from "@/shared/components/ui/Button";
@@ -26,8 +27,12 @@ export default function DataPage() {
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  const [search, setSearch] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
+  const requestId = useRef(0);
 
   useEffect(() => {
     clientsApi
@@ -36,30 +41,36 @@ export default function DataPage() {
         setClients(list);
         if (list.length > 0) setClientId((current) => current || list[0].id);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const refresh = async (id: string, period: string) => {
     if (!id) return;
+    const request = ++requestId.current;
     const [p, f] = await Promise.all([
       dataApi.listPeriods(id),
       dataApi.listFiles(id, period || undefined),
     ]);
-    setPeriods(p);
-    setFiles(f);
+    if (request === requestId.current) { setPeriods(p); setFiles(f); }
   };
 
   useEffect(() => {
+    setFiles([]);
     if (clientId) refresh(clientId, selectedPeriod).catch((e) => setError(e.message));
+    return () => { requestId.current += 1; };
   }, [clientId, selectedPeriod]);
 
   const handleUpload = async (list: FileList | File[] | null) => {
-    if (!list || list.length === 0 || !clientId) return;
+    if (!list || list.length === 0 || !clientId || busy) return;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(uploadPeriod)) { setError("Choisis une période au format AAAA-MM."); return; }
     setBusy(true);
     setError(null);
+    setNotice("");
     try {
       await dataApi.upload(clientId, uploadPeriod, list);
       await refresh(clientId, selectedPeriod);
+      setNotice(`${list.length} fichier(s) ajouté(s) pour ${uploadPeriod}.`);
       if (fileInput.current) fileInput.current.value = "";
     } catch (e) {
       setError((e as Error).message);
@@ -98,11 +109,12 @@ export default function DataPage() {
   };
 
   const handleDownload = async (file: DataFile) => {
-    const { url } = await dataApi.downloadUrl(file.id);
-    window.open(url, "_blank");
+    try { const { url } = await dataApi.downloadUrl(file.id); window.location.assign(url); }
+    catch (e) { setError((e as Error).message); }
   };
 
   const handleDelete = async (file: DataFile) => {
+    if (!window.confirm(`Supprimer le fichier « ${file.filename} » ?`)) return;
     setBusy(true);
     try {
       await dataApi.remove(file.id);
@@ -127,7 +139,9 @@ export default function DataPage() {
         </div>
       )}
 
-      {clients.length === 0 ? (
+      <div className="mb-6"><ClientCreateForm disabled={busy || loading} onCreated={client => { setClients(current => [...current, client]); setClientId(client.id); setSelectedPeriod(""); setError(null); setNotice(`Client « ${client.name} » créé.`); }} /></div>
+      {notice && <p role="status" className="mb-4 text-sm text-success">{notice}</p>}
+      {loading ? <p role="status">Chargement des clients…</p> : clients.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <FolderPlus className="h-8 w-8 text-muted-foreground" />
@@ -147,6 +161,7 @@ export default function DataPage() {
                   <Select
                     id="client"
                     value={clientId}
+                    disabled={busy}
                     onChange={(e) => {
                       setClientId(e.target.value);
                       setSelectedPeriod("");
@@ -164,6 +179,7 @@ export default function DataPage() {
                   <Label>Périodes</Label>
                   <div className="space-y-1">
                     <button
+                      disabled={busy}
                       onClick={() => setSelectedPeriod("")}
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                         selectedPeriod === ""
@@ -178,6 +194,7 @@ export default function DataPage() {
                     </button>
                     {periods.map((p) => (
                       <button
+                        disabled={busy}
                         key={p.period}
                         onClick={() => setSelectedPeriod(p.period)}
                         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
@@ -200,6 +217,8 @@ export default function DataPage() {
                 <Label htmlFor="period">Déposer dans la période</Label>
                 <Input
                   id="period"
+                  type="month"
+                  disabled={busy}
                   value={uploadPeriod}
                   onChange={(e) => setUploadPeriod(e.target.value)}
                   placeholder="2026-08"
@@ -252,6 +271,8 @@ export default function DataPage() {
 
           <Card>
             <CardContent className="p-0">
+              <div className="p-4"><Input aria-label="Rechercher un fichier" placeholder="Rechercher un fichier…" value={search} onChange={e => setSearch(e.target.value)} /></div>
+              {files.length > 0 && !files.some(file => file.filename.toLocaleLowerCase().includes(search.toLocaleLowerCase())) && <p className="p-6 text-sm text-muted-foreground">Aucun fichier ne correspond à cette recherche.</p>}
               {files.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 p-16 text-center">
                   <FileText className="h-8 w-8 text-muted-foreground" />
@@ -261,7 +282,7 @@ export default function DataPage() {
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
-                  {files.map((file) => (
+                  {files.filter(file => file.filename.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((file) => (
                     <li
                       key={file.id}
                       className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/50"
@@ -288,6 +309,7 @@ export default function DataPage() {
                           variant="ghost"
                           size="icon"
                           title="Supprimer"
+                          disabled={busy}
                           onClick={() => handleDelete(file)}
                         >
                           <Trash2 className="h-4 w-4" />
