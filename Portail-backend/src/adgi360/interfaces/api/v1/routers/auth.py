@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adgi360.domain.accounts.entities import UserRole, normalize_email, slugify
+from adgi360.domain.accounts.entities import (
+    UserRole,
+    normalize_email,
+    normalize_phone,
+    slugify,
+)
 from adgi360.infrastructure.db.models import OrganizationModel, UserModel
 from adgi360.infrastructure.db.session import get_session
 from adgi360.infrastructure.security import (
@@ -15,6 +20,7 @@ from adgi360.interfaces.api.v1.schemas.auth_schemas import (
     LoginRequest,
     MeOut,
     OrganizationOut,
+    PhoneUpdate,
     SignupRequest,
     TokenOut,
     UserOut,
@@ -123,3 +129,47 @@ async def list_members(
         .order_by(func.lower(UserModel.full_name))
     )
     return list(result.scalars().all())
+
+
+@router.put("/me/phone", response_model=UserOut)
+async def update_my_phone(
+    payload: PhoneUpdate, user: CurrentUser, session: AsyncSession = Depends(get_session)
+) -> UserModel:
+    """Enregistre le numéro qui autorise l'accès au bot Telegram.
+
+    Changer de numéro coupe la liaison Telegram existante : l'ancien téléphone
+    ne doit plus donner accès aux rapports de l'agence.
+    """
+    phone: str | None = None
+    if payload.phone and payload.phone.strip():
+        try:
+            phone = normalize_phone(payload.phone)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        taken = await session.execute(
+            select(UserModel.id).where(UserModel.phone == phone, UserModel.id != user.id)
+        )
+        if taken.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "Ce numéro est déjà associé à un autre compte"
+            )
+
+    if phone != user.phone:
+        user.phone = phone
+        user.telegram_user_id = None
+        user.telegram_linked_at = None
+        await session.commit()
+        await session.refresh(user)
+    return user
+
+
+@router.delete("/me/telegram", response_model=UserOut)
+async def unlink_my_telegram(
+    user: CurrentUser, session: AsyncSession = Depends(get_session)
+) -> UserModel:
+    """Délie le compte Telegram (téléphone perdu, changement d'appareil)."""
+    user.telegram_user_id = None
+    user.telegram_linked_at = None
+    await session.commit()
+    await session.refresh(user)
+    return user

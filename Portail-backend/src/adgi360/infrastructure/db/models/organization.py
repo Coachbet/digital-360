@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from adgi360.infrastructure.db.base import Base
@@ -64,6 +64,12 @@ class UserModel(Base):
     """
 
     __tablename__ = "users"
+    # Index nommés à l'identique de ceux posés par init_db sur les bases
+    # existantes : une base neuve et une base migrée ont le même schéma.
+    __table_args__ = (
+        Index("uq_users_phone", "phone", unique=True),
+        Index("uq_users_telegram_user_id", "telegram_user_id", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -76,8 +82,26 @@ class UserModel(Base):
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")
     is_active: Mapped[bool] = mapped_column(default=True)
+
+    # --- Accès par le bot Telegram
+    # Numéro professionnel au format E.164, saisi par l'utilisateur dans le
+    # portail. C'est la preuve d'identité : le bot ne lie un compte Telegram
+    # que si le numéro partagé par Telegram correspond exactement à celui-ci.
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Identifiant Telegram mémorisé après la première liaison réussie. Les
+    # messages suivants sont reconnus sur cet identifiant, sans redemander le
+    # numéro. Remis à zéro si le numéro change.
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    telegram_linked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     organization: Mapped["OrganizationModel"] = relationship(back_populates="users")
+
+    @property
+    def telegram_linked(self) -> bool:
+        return self.telegram_user_id is not None

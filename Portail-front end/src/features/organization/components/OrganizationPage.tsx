@@ -2,6 +2,7 @@ import { AlertTriangle, Check, ImageUp, Presentation, Save, Trash2 } from "lucid
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/AuthContext";
+import TelegramCard from "@/features/auth/components/TelegramCard";
 import { OrganizationProfile, organizationApi } from "@/features/organization/api";
 import { PageHeader } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/Badge";
@@ -98,6 +99,8 @@ export default function OrganizationPage() {
       )}
 
       <div className="space-y-6">
+        <TelegramCard />
+
         {/* ------------------------------------------------------- identité */}
         <Card>
           <CardContent className="space-y-5 p-6">

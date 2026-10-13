@@ -6,6 +6,8 @@ export interface User {
   full_name: string;
   role: "owner" | "admin" | "member";
   is_active: boolean;
+  phone: string | null;
+  telegram_linked: boolean;
   created_at: string;
 }
 
@@ -48,4 +50,9 @@ export const authApi = {
   me: () => api.get<{ user: User; organization: Organization }>("/auth/me"),
 
   members: () => api.get<User[]>("/auth/members"),
+
+  /** Numéro qui autorise l'accès au bot Telegram. null pour le retirer. */
+  updatePhone: (phone: string | null) => api.put<User>("/auth/me/phone", { phone }),
+
+  unlinkTelegram: () => api.delete<User>("/auth/me/telegram"),
 };

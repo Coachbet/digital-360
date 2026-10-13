@@ -53,6 +53,8 @@ services:
       CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v23.0}
       FRONTEND_ORIGIN: https://${APP_DOMAIN}
+      # Secret partagé avec n8n pour les routes /api/v1/bot (bot Telegram).
+      BOT_API_TOKEN: ${BOT_API_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy

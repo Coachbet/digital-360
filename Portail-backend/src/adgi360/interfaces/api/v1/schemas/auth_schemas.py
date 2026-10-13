@@ -25,6 +25,8 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    phone: str | None = None
+    telegram_linked: bool = False
     created_at: datetime
 
 
@@ -52,3 +54,9 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
     user: UserOut
     organization: OrganizationOut
+
+
+class PhoneUpdate(BaseModel):
+    """Numéro professionnel utilisé pour lier le bot Telegram. None = retirer."""
+
+    phone: str | None = Field(default=None, max_length=40)

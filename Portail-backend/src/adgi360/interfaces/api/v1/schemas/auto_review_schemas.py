@@ -31,6 +31,12 @@ class RenderReportRequest(BaseModel):
     slides: list[dict] = Field(default_factory=list)
 
 
+class FailReportRequest(BaseModel):
+    """Envoyé par n8n quand l'analyse échoue après ses tentatives."""
+
+    reason: str = Field(default="Échec de l'analyse automatique", max_length=2000)
+
+
 class AutoReviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

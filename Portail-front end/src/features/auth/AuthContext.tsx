@@ -26,6 +26,8 @@ interface AuthState {
   logout: () => void;
   /** Après modification du profil de l'agence, sans refaire un tour complet. */
   setOrganization: (organization: Organization) => void;
+  /** Après modification du profil utilisateur (téléphone, liaison Telegram). */
+  setUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup: async (payload) => apply(await authApi.signup(payload)),
       logout,
       setOrganization,
+      setUser,
     }),
     [user, organization, loading, apply, logout],
   );

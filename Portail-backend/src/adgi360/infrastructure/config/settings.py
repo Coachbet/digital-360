@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # l'hôte s'appelle host.docker.internal — pas localhost.
     backend_public_url: str = "http://host.docker.internal:8001"
 
+    # --- Bot Telegram (via n8n)
+    # Secret partagé entre n8n et le backend pour les routes /api/v1/bot.
+    # n8n l'envoie dans l'en-tête X-Bot-Token. Vide = routes du bot désactivées.
+    bot_api_token: str = ""
+
     # --- Sécurité
     # Valeur de développement uniquement : en production, SECRET_KEY doit être
     # fournie par l'environnement, sinon les jetons de toutes les instances

@@ -17,6 +17,7 @@ from adgi360.interfaces.api.v1.schemas.auto_review_schemas import (
     AutoReviewDetailOut,
     AutoReviewOut,
     ClientTypeOut,
+    FailReportRequest,
     RenderReportRequest,
     ReportDownloadOut,
     ReportPreviewOut,
@@ -122,6 +123,32 @@ async def render_report(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     except ExternalServiceError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+
+@router.post("/{review_id}/fail", response_model=AutoReviewOut)
+async def fail_report(
+    review_id: str,
+    payload: FailReportRequest,
+    token: str = Query(..., description="Jeton de rappel émis au lancement"),
+    session: AsyncSession = Depends(get_session),
+) -> ReviewRequestModel:
+    """Appelé par n8n quand l'analyse échoue définitivement.
+
+    Sans ce rappel, une review dont le workflow plante reste « en cours »
+    indéfiniment dans le portail. Une review déjà terminée n'est pas modifiée :
+    un rappel tardif ne doit pas écraser un rapport valide.
+    """
+    if not verify_callback_token(review_id, token):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Jeton de rappel invalide")
+    review = await session.get(ReviewRequestModel, review_id)
+    if review is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Review introuvable")
+    if review.status in (ReviewStatus.PENDING.value, ReviewStatus.PROCESSING.value):
+        review.status = ReviewStatus.FAILED.value
+        review.error_message = payload.reason
+        await session.commit()
+        await session.refresh(review)
+    return review
 
 
 @router.post("/{review_id}/approve", response_model=AutoReviewOut)

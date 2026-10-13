@@ -11,6 +11,7 @@ from adgi360.interfaces.api.v1.routers import (
     advertising,
     auth,
     auto_review,
+    bot,
     calendar,
     clients,
     data,
@@ -66,6 +67,7 @@ for router in (
     clients.router,
     data.router,
     auto_review.router,
+    bot.router,
     calendar.router,
     invoices.router,
 ):

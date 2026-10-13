@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adgi360.infrastructure.config.settings import settings
@@ -26,3 +27,19 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all crée les tables manquantes mais n'ajoute jamais de colonne
+        # à une table existante. En attendant Alembic, les colonnes ajoutées
+        # depuis la première version sont posées ici, de façon idempotente.
+        if conn.dialect.name == "postgresql":
+            for statement in _ADDED_COLUMNS:
+                await conn.execute(text(statement))
+
+
+# Chaque instruction doit pouvoir être rejouée à chaque démarrage sans effet.
+_ADDED_COLUMNS = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_user_id BIGINT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_phone ON users (phone)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_telegram_user_id ON users (telegram_user_id)",
+)

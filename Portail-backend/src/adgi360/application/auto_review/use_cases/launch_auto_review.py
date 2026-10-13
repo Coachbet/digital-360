@@ -37,6 +37,7 @@ class LaunchAutoReviewUseCase:
         client_type: str,
         data_file_ids: list[str],
         additional_info: str | None = None,
+        notify_telegram_chat_id: int | None = None,
     ) -> ReviewRequestModel:
         client = await self._session.get(ClientModel, client_id)
         if client is None or client.organization_id != organization_id:
@@ -112,6 +113,15 @@ class LaunchAutoReviewUseCase:
                 f"{settings.backend_public_url}/api/v1/auto-review/{review.id}/render"
                 f"?token={create_callback_token(review.id)}"
             ),
+            # Rappel en cas d'échec de l'analyse : même jeton que le rendu,
+            # pour que la review ne reste pas bloquée « en cours ».
+            "fail_callback_url": (
+                f"{settings.backend_public_url}/api/v1/auto-review/{review.id}/fail"
+                f"?token={create_callback_token(review.id)}"
+            ),
+            # Renseigné quand la demande vient du bot : n8n renvoie alors le
+            # PowerPoint dans la conversation Telegram d'origine.
+            "notify": {"telegram_chat_id": notify_telegram_chat_id},
         }
 
         try:

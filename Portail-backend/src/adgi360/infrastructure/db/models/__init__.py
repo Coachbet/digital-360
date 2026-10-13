@@ -1,4 +1,5 @@
 from adgi360.infrastructure.db.models.advertising_connection import AdvertisingConnectionModel
+from adgi360.infrastructure.db.models.bot_event import BotEventModel
 from adgi360.infrastructure.db.models.calendar_event import CalendarEventModel
 from adgi360.infrastructure.db.models.client import ClientModel
 from adgi360.infrastructure.db.models.data_file import DataFileModel
@@ -9,6 +10,7 @@ from adgi360.infrastructure.db.models.review_request import ReviewRequestModel
 
 __all__ = [
     "AdvertisingConnectionModel",
+    "BotEventModel",
     "CalendarEventModel",
     "ClientModel",
     "DataFileModel",

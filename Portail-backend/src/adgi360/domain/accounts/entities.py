@@ -57,6 +57,8 @@ class User:
     full_name: str
     role: UserRole = UserRole.MEMBER
     is_active: bool = True
+    phone: str | None = None
+    telegram_user_id: int | None = None
     created_at: datetime | None = None
 
 
@@ -64,6 +66,30 @@ def normalize_email(email: str) -> str:
     """L'email sert d'identifiant de connexion : on le normalise pour qu'une
     différence de casse ou d'espaces ne crée pas un doublon de compte."""
     return email.strip().lower()
+
+
+def normalize_phone(raw: str) -> str:
+    """Ramène un numéro au format international E.164 (« +15145551234 »).
+
+    Le même numéro arrive sous plusieurs formes : saisi dans le portail
+    (« (514) 555-1234 »), partagé par Telegram (« 15145551234 » ou
+    « +15145551234 »). La liaison Telegram compare des chaînes : sans cette
+    normalisation unique, un utilisateur légitime serait refusé.
+
+    Un numéro à 10 chiffres est considéré nord-américain (indicatif 1), ce qui
+    correspond à la clientèle des agences québécoises.
+    """
+    if raw is None:
+        raise ValueError("Numéro de téléphone manquant")
+    text = str(raw).strip()
+    digits = "".join(c for c in text if c.isdigit())
+    if text.startswith("00"):
+        digits = digits[2:]
+    elif not text.startswith("+") and len(digits) == 10:
+        digits = "1" + digits
+    if not 8 <= len(digits) <= 15:
+        raise ValueError("Numéro de téléphone invalide")
+    return "+" + digits
 
 
 def slugify(name: str) -> str:
