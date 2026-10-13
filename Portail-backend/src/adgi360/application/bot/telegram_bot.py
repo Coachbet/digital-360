@@ -171,8 +171,15 @@ class TelegramBotService:
 
         items = []
         for client in clients:
-            latest = await self._latest_xlsx_period(client.id)
-            items.append({"id": client.id, "name": client.name, "latest_period": latest})
+            periods = await self._xlsx_periods(client.id)
+            items.append({
+                "id": client.id,
+                "name": client.name,
+                "latest_period": periods[0] if periods else None,
+                # Toutes les périodes analysables, la plus récente d'abord :
+                # n8n en fait un clavier de boutons, un clic par période.
+                "periods": periods,
+            })
         lines = [
             f"• {c['name']}" + (f" — données {c['latest_period']}" if c["latest_period"] else " — aucun export .xlsx")
             for c in items
@@ -187,16 +194,18 @@ class TelegramBotService:
         )
         return list(result.scalars().all())
 
-    async def _latest_xlsx_period(self, client_id: str) -> str | None:
+    async def _xlsx_periods(self, client_id: str) -> list[str]:
+        """Périodes ayant au moins un export .xlsx, de la plus récente à la plus ancienne."""
         result = await self._session.execute(
             select(DataFileModel)
             .where(DataFileModel.client_id == client_id)
             .order_by(DataFileModel.uploaded_at.desc())
         )
+        periods: list[str] = []
         for f in result.scalars().all():
-            if f.filename.lower().endswith(".xlsx"):
-                return f.period
-        return None
+            if f.filename.lower().endswith(".xlsx") and f.period not in periods:
+                periods.append(f.period)
+        return periods
 
     def _match_client(self, clients: list[ClientModel], query: str) -> list[ClientModel]:
         wanted = _fold(query)
@@ -217,13 +226,20 @@ class TelegramBotService:
         instructions: str | None,
         n8n: N8nClient,
         storage: FileStorage,
+        client_id: str | None = None,
     ) -> BotReply:
         user = await self._user_by_telegram(telegram_user_id)
         if user is None:
             return NOT_LINKED
 
         clients = await self._clients_of(user.organization_id)
-        matches = self._match_client(clients, client_query or "")
+        if client_id:
+            # Clic sur un bouton : l'identifiant est exact, mais il vient du
+            # téléphone. Il n'est accepté que s'il appartient à l'agence.
+            matches = [c for c in clients if c.id == client_id]
+            client_query = client_query or "ce client"
+        else:
+            matches = self._match_client(clients, client_query or "")
         if not matches:
             names = ", ".join(c.name for c in clients) or "aucun"
             return BotReply(

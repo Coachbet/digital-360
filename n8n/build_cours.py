@@ -10,9 +10,22 @@ import sys
 import uuid
 from pathlib import Path
 
-OUT = Path(__file__).parent / "cours"
+# Cible : « local » (n8n dans Docker sur le Mac) ou « vps » (pile de production OVH).
+# python3 n8n/build_cours.py        → n8n/cours/
+# python3 n8n/build_cours.py vps    → n8n/cours/vps/
+TARGET = sys.argv[1] if len(sys.argv) > 1 else "local"
+OUT = Path(__file__).parent / "cours" / ("vps" if TARGET == "vps" else "")
 BACKEND = "http://host.docker.internal:8001/api/v1"
 OLLAMA_MODEL = "llama3.1"
+
+# Sur le VPS, tous les services partagent le réseau Docker interne : on les
+# joint par leur nom de service (voir deploy/docker-compose.prod.yml).
+VPS_REPLACEMENTS = {
+    "http://host.docker.internal:8001": "http://backend:8000",
+    "http://host.docker.internal:11434": "http://ollama:11434",
+    "http://host.docker.internal:9000": "http://minio:9000",
+    "llama3.1": "llama3.2:3b",
+}
 
 TELEGRAM_CRED = {"telegramApi": {"id": "", "name": "adgi360 Bot"}}
 BOT_API_CRED = {"httpHeaderAuth": {"id": "", "name": "adgi360 Bot API"}}
@@ -65,8 +78,12 @@ class Flow:
             "settings": {"executionOrder": "v1", **(settings or {})},
             "tags": [{"name": "adgi360"}],
         }
-        OUT.mkdir(exist_ok=True)
-        (OUT / filename).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        if TARGET == "vps":
+            for old, new in VPS_REPLACEMENTS.items():
+                text = text.replace(old, new)
+        OUT.mkdir(parents=True, exist_ok=True)
+        (OUT / filename).write_text(text)
 
 
 # ---------------------------------------------------------------- helpers
@@ -220,9 +237,21 @@ return [{ json: {
 
 
 # ===================================================== 3. bot Telegram
+# Clavier permanent sous la zone de saisie : un clic par commande.
+MENU_LABELS = {"📊 Rapport": "/rapport", "📁 Clients": "/clients", "⏳ Statut": "/statut", "❓ Aide": "/aide"}
+MENU = dict(
+    replyMarkup="replyKeyboard",
+    replyKeyboard={"rows": [
+        {"row": {"buttons": [{"text": "📊 Rapport"}, {"text": "📁 Clients"}]}},
+        {"row": {"buttons": [{"text": "⏳ Statut"}, {"text": "❓ Aide"}]}},
+    ]},
+    replyKeyboardOptions={"resize_keyboard": True},
+)
+
 HELP = (
     "={{ 'Bonjour ' + ($json.user?.full_name || '') + ' 👋 (' + ($json.user?.organization_name || '') + ')\\n\\n' }}"
-    "Voici ce que je sais faire :\n"
+    "Utilisez les boutons sous la zone de saisie, ou :\n"
+    "/rapport — choisir un client en un clic\n"
     "/rapport <client> [AAAA-MM] [-- consignes] — génère le rapport PowerPoint\n"
     "/statut — vos derniers rapports\n"
     "/clients — la liste de vos clients\n\n"
@@ -253,19 +282,31 @@ def bot_telegram():
     f = Flow("adgi360 – Bot Telegram")
     y = 0
     f.node("Message Telegram", "n8n-nodes-base.telegramTrigger", 1.1,
-           {"updates": ["message"], "additionalFields": {}}, (0, y),
+           {"updates": ["message", "callback_query"], "additionalFields": {}}, (0, y),
            credentials=TELEGRAM_CRED, webhookId=str(uuid.uuid4()),
            notes="Exige une URL HTTPS publique pour n8n (tunnel en local, domaine sur le VPS).")
     f.node("Extraire le message", "n8n-nodes-base.set", 3.4, assignments(
-        ("chat_id", "={{ $json.message.chat.id }}", "number"),
-        ("chat_type", "={{ $json.message.chat.type }}", "string"),
-        ("telegram_user_id", "={{ $json.message.from.id }}", "number"),
-        ("first_name", "={{ $json.message.from.first_name || '' }}", "string"),
-        ("text", "={{ ($json.message.text || '').trim() }}", "string"),
-        ("has_contact", "={{ Boolean($json.message.contact) }}", "boolean"),
-        ("contact_phone", "={{ $json.message.contact?.phone_number || '' }}", "string"),
-        ("contact_user_id", "={{ $json.message.contact?.user_id || 0 }}", "number"),
-    ), (220, y), notes="Ne garde que les champs utiles : le reste du message Telegram n'est pas propagé.")
+        ("chat_id", "={{ ($json.message ?? $json.callback_query.message).chat.id }}", "number"),
+        ("chat_type", "={{ ($json.message ?? $json.callback_query.message).chat.type }}", "string"),
+        ("telegram_user_id", "={{ ($json.message ?? $json.callback_query).from.id }}", "number"),
+        ("first_name", "={{ ($json.message ?? $json.callback_query).from.first_name || '' }}", "string"),
+        ("text", "={{ $json.callback_query ? $json.callback_query.data : (" + json.dumps(MENU_LABELS, ensure_ascii=False)
+         + "[($json.message.text || '').trim()] ?? ($json.message.text || '').trim()) }}", "string"),
+        ("is_callback", "={{ Boolean($json.callback_query) }}", "boolean"),
+        ("callback_id", "={{ $json.callback_query?.id || '' }}", "string"),
+        ("has_contact", "={{ Boolean($json.message?.contact) }}", "boolean"),
+        ("contact_phone", "={{ $json.message?.contact?.phone_number || '' }}", "string"),
+        ("contact_user_id", "={{ $json.message?.contact?.user_id || 0 }}", "number"),
+    ), (220, y), notes="Un message, un clic sur un bouton ou un bouton du menu deviennent tous un « text » à interpréter.")
+    f.node("Clic sur un bouton ?", "n8n-nodes-base.if", 2.2,
+           if_params(cond("={{ $json.is_callback }}", "boolean", "true", single=True)), (440, y - 480))
+    f.node("Accuser le clic", "n8n-nodes-base.telegram", 1.2, {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {},
+    }, (660, y - 500), credentials=TELEGRAM_CRED, onError="continueRegularOutput",
+       notes="Sans réponse au clic, Telegram laisse tourner un sablier sur le bouton.")
     f.node("Contact partagé ?", "n8n-nodes-base.if", 2.2,
            if_params(cond("={{ $json.has_contact }}", "boolean", "true", single=True)), (440, y))
 
@@ -277,9 +318,9 @@ def bot_telegram():
     ), (660, y - 260), credentials=BOT_API_CRED, onError="continueErrorOutput", **RETRY,
        notes="Le backend compare le numéro partagé à celui inscrit dans le portail et refuse un contact transféré.")
     f.node("Confirmer la liaison", "n8n-nodes-base.telegram", 1.2, tg_text(
-        CHAT, "={{ $json.message }}",
-        replyMarkup="replyKeyboardRemove", replyKeyboardRemove={"remove_keyboard": True},
-    ), (880, y - 300), credentials=TELEGRAM_CRED, **RETRY)
+        CHAT, "={{ $json.message }}", **MENU,
+    ), (880, y - 300), credentials=TELEGRAM_CRED, **RETRY,
+       notes="Remplace le bouton « Partager mon numéro » par le menu des commandes.")
 
     # --- branche message normal
     f.node("Vérifier l'utilisateur", "n8n-nodes-base.executeWorkflow", 1.2, {
@@ -301,10 +342,25 @@ def bot_telegram():
     ), (1100, y + 240), credentials=TELEGRAM_CRED, **RETRY)
 
     f.node("Commande ou texte libre ?", "n8n-nodes-base.switch", 3.2, switch_params(
-        [("commande", cond("={{ $json.text }}", "string", "startsWith", "/"))], "texte libre",
+        [("commande", cond("={{ /^(\\/|[rp]\\|)/.test($json.text) }}", "boolean", "true", single=True))], "texte libre",
     ), (1100, y))
     f.node("Lire la commande", "n8n-nodes-base.code", 2, {"jsCode": r"""// /rapport Maison Boréale 2026-09 -- insister sur le ROAS
+// ou un clic sur un bouton : « r|<client_id>|<période> » (lancer), « p|<client_id> » (choisir la période)
 const ctx = $input.first().json;
+
+if (/^[rp]\|/.test(ctx.text)) {
+  const [kind, clientId, period] = ctx.text.split('|');
+  return [{ json: {
+    ...ctx,
+    intent: kind === 'r' ? 'rapport' : 'periodes',
+    client: '',
+    client_id: clientId,
+    period: period || null,
+    instructions: null,
+    source: 'bouton',
+  } }];
+}
+
 const [head = '', ...rest] = ctx.text.split(/\s+/);
 const command = head.toLowerCase().replace(/@.*$/, ''); // « /rapport@MonBot » dans un groupe
 
@@ -334,6 +390,7 @@ return [{ json: {
   ...ctx,
   intent: intents[command] || 'aide',
   client: args,
+  client_id: null,
   period,
   instructions,
   source: 'commande',
@@ -365,6 +422,7 @@ return [{ json: {
   ...ctx,
   intent: allowed.includes(answer.intent) ? answer.intent : 'aide',
   client: String(answer.client || '').trim(),
+  client_id: null,
   period: /^\d{4}-\d{2}$/.test(answer.period || '') ? answer.period : null,
   instructions: String(answer.instructions || '').trim() || null,
   source: 'ia',
@@ -379,20 +437,61 @@ return [{ json: {
         ("rapport", cond("={{ $json.intent }}", "string", "equals", "rapport")),
         ("statut", cond("={{ $json.intent }}", "string", "equals", "statut")),
         ("clients", cond("={{ $json.intent }}", "string", "equals", "clients")),
+        ("periodes", cond("={{ $json.intent }}", "string", "equals", "periodes")),
     ], "aide"), (1760, y))
 
     # rapport
     f.node("Client précisé ?", "n8n-nodes-base.if", 2.2,
-           if_params(cond("={{ $json.client }}", "string", "notEmpty", single=True)), (1980, y - 300))
+           if_params(cond("={{ $json.client || $json.client_id || '' }}", "string", "notEmpty", single=True)),
+           (1980, y - 300), notes="Sans client précisé, on propose la liste en boutons au lieu d'un message d'usage.")
     f.node("Lancer le rapport", "n8n-nodes-base.httpRequest", 4.2, http(
         "POST", f"{BACKEND}/bot/reviews",
         body="={{ JSON.stringify({ telegram_user_id: $json.telegram_user_id, chat_id: $json.chat_id, "
-             "client: $json.client, period: $json.period, instructions: $json.instructions }) }}",
+             "client: $json.client, client_id: $json.client_id, period: $json.period, instructions: $json.instructions }) }}",
         timeout=60000,
     ), (2200, y - 360), credentials=BOT_API_CRED, onError="continueErrorOutput", **RETRY)
-    f.node("Usage /rapport", "n8n-nodes-base.telegram", 1.2, tg_text(
-        CHAT, "Pour quel client ? Exemple :\n/rapport Maison Boréale 2026-09 -- insister sur le ROAS",
-    ), (2200, y - 180), credentials=TELEGRAM_CRED, **RETRY)
+    f.node("Construire le clavier", "n8n-nodes-base.code", 2, {"jsCode": r"""// Transforme la liste des clients en boutons : un clic = un rapport.
+// Un client avec une seule période lance directement le rapport ; avec
+// plusieurs, un second clavier propose les périodes (les plus récentes d'abord).
+const ctx = $("Router l'intention").first().json;
+const res = $input.first().json;
+if (!res.ok) {
+  return [{ json: { chat_id: ctx.chat_id, text: res.message, keyboard: { rows: [] } } }];
+}
+const clients = res.clients || [];
+let text;
+let buttons;
+
+if (ctx.intent === 'periodes') {
+  const client = clients.find((c) => c.id === ctx.client_id);
+  const periods = client?.periods || [];
+  text = periods.length
+    ? `📅 ${client.name} : quelle période ?`
+    : `Aucun export .xlsx pour ${client?.name || 'ce client'}.`;
+  buttons = periods.slice(0, 12).map((p) => ({
+    text: p, additionalFields: { callback_data: `r|${client.id}|${p}` },
+  }));
+} else {
+  const ready = clients.filter((c) => (c.periods || []).length);
+  const waiting = clients.filter((c) => !(c.periods || []).length).map((c) => c.name);
+  const intro = ctx.intent === 'clients' ? '📁 Vos clients. Touchez-en un pour lancer son rapport :' : '📊 Pour quel client ?';
+  text = ready.length ? intro : "Aucun client n'a encore d'export .xlsx.";
+  if (waiting.length) text += `\nSans données : ${waiting.join(', ')} (à déposer dans le portail, onglet Données).`;
+  buttons = ready.slice(0, 20).map((c) => ({
+    text: c.periods.length === 1 ? `${c.name} · ${c.periods[0]}` : `${c.name} ▸`,
+    additionalFields: { callback_data: c.periods.length === 1 ? `r|${c.id}|${c.periods[0]}` : `p|${c.id}` },
+  }));
+}
+
+// Deux boutons par ligne : lisible sur un téléphone.
+const rows = [];
+for (let i = 0; i < buttons.length; i += 2) rows.push({ row: { buttons: buttons.slice(i, i + 2) } });
+return [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows } } }];"""}, (2420, y + 200))
+    f.node("Proposer les choix", "n8n-nodes-base.telegram", 1.2, tg_text(
+        "={{ $json.chat_id }}", "={{ $json.text }}",
+        replyMarkup="inlineKeyboard", inlineKeyboard="={{ $json.keyboard }}",
+    ), (2640, y + 200), credentials=TELEGRAM_CRED, **RETRY,
+       notes="Le clavier est construit par le nœud précédent : autant de boutons que de clients.")
     # statut / clients
     f.node("Derniers rapports", "n8n-nodes-base.httpRequest", 4.2, http(
         "GET", f"{BACKEND}/bot/reviews",
@@ -401,12 +500,12 @@ return [{ json: {
     f.node("Liste des clients", "n8n-nodes-base.httpRequest", 4.2, http(
         "GET", f"{BACKEND}/bot/clients",
         query=[("telegram_user_id", "={{ $json.telegram_user_id }}")],
-    ), (2200, y + 180), credentials=BOT_API_CRED, onError="continueErrorOutput", **RETRY)
+    ), (2200, y + 200), credentials=BOT_API_CRED, onError="continueErrorOutput", **RETRY)
     f.node("Répondre", "n8n-nodes-base.telegram", 1.2, tg_text(CHAT, "={{ $json.message }}"),
            (2420, y - 100), credentials=TELEGRAM_CRED, **RETRY,
            notes="Le backend renvoie toujours un message prêt à afficher, succès comme refus métier.")
-    f.node("Aide", "n8n-nodes-base.telegram", 1.2, tg_text(CHAT, HELP),
-           (2200, y + 360), credentials=TELEGRAM_CRED, **RETRY)
+    f.node("Aide", "n8n-nodes-base.telegram", 1.2, tg_text(CHAT, HELP, **MENU),
+           (2200, y + 400), credentials=TELEGRAM_CRED, **RETRY)
 
     # erreurs techniques
     f.node("Portail indisponible", "n8n-nodes-base.telegram", 1.2, tg_text(
@@ -417,6 +516,8 @@ return [{ json: {
     }, (2640, y + 560), notes="Fait échouer l'exécution pour déclencher le workflow d'alerte.")
 
     f.link("Message Telegram", "Extraire le message")
+    f.link("Extraire le message", "Clic sur un bouton ?")
+    f.link("Clic sur un bouton ?", "Accuser le clic", 0)
     f.link("Extraire le message", "Contact partagé ?")
     f.link("Contact partagé ?", "Lier le compte", 0)
     f.link("Contact partagé ?", "Vérifier l'utilisateur", 1)
@@ -435,11 +536,15 @@ return [{ json: {
     f.link("Router l'intention", "Client précisé ?", 0)
     f.link("Router l'intention", "Derniers rapports", 1)
     f.link("Router l'intention", "Liste des clients", 2)
-    f.link("Router l'intention", "Aide", 3)
+    f.link("Router l'intention", "Liste des clients", 3)
+    f.link("Router l'intention", "Aide", 4)
     f.link("Client précisé ?", "Lancer le rapport", 0)
-    f.link("Client précisé ?", "Usage /rapport", 1)
+    f.link("Client précisé ?", "Liste des clients", 1)
+    f.link("Liste des clients", "Construire le clavier", 0)
+    f.link("Construire le clavier", "Proposer les choix")
     for n in ("Lancer le rapport", "Derniers rapports", "Liste des clients"):
-        f.link(n, "Répondre", 0)
+        if n != "Liste des clients":
+            f.link(n, "Répondre", 0)
         f.link(n, "Portail indisponible", 1)
     f.link("Portail indisponible", "Signaler l'échec")
     f.dump("3-adgi360-bot-telegram.json")

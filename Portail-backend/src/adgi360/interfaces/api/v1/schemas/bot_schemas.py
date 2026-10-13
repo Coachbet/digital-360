@@ -12,5 +12,7 @@ class BotReviewRequest(BaseModel):
     telegram_user_id: int
     chat_id: int
     client: str = Field(default="", max_length=200)
+    # Renseigné quand l'utilisateur clique sur un bouton du clavier Telegram.
+    client_id: str | None = Field(default=None, max_length=36)
     period: str | None = Field(default=None, max_length=50)
     instructions: str | None = Field(default=None, max_length=2000)

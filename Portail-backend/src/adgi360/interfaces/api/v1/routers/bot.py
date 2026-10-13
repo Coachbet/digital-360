@@ -69,6 +69,7 @@ async def launch_review(
             instructions=payload.instructions,
             n8n=n8n,
             storage=storage,
+            client_id=payload.client_id,
         )
     except ExternalServiceError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc

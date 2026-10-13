@@ -163,3 +163,37 @@ def test_download_is_scoped_to_agency():
     reply = run(scenario)
     assert not reply.ok and reply.data["reason"] == "not_found"
     storage.presigned_url.assert_not_awaited()
+
+
+def test_clients_list_periods_newest_first_and_launch_by_button():
+    n8n, storage = _mocks()
+
+    async def scenario(s):
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        s.add_all([
+            DataFileModel(organization_id="org-a", client_id="c1", period="2026-08",
+                          filename="aout.xlsx", storage_key="k1", uploaded_at=now - timedelta(days=30)),
+            DataFileModel(organization_id="org-a", client_id="c1", period="2026-09",
+                          filename="sept.xlsx", storage_key="k2", uploaded_at=now),
+        ])
+        await s.commit()
+        service = TelegramBotService(s)
+        await service.link(TG_ALICE, TG_ALICE, "+15145551234")
+        listing = await service.list_clients(TG_ALICE)
+        launched = await service.launch_review(TG_ALICE, TG_ALICE, "", "2026-08", None,
+                                               n8n, storage, client_id="c1")
+        return listing, launched
+
+    listing, launched = run(scenario)
+    assert listing.data["clients"][0]["periods"] == ["2026-09", "2026-08"]
+    assert launched.ok and launched.data["period"] == "2026-08"
+    assert launched.data["files"] == ["aout.xlsx"]
+
+
+def test_button_with_other_agency_client_id_is_refused():
+    n8n, storage = _mocks()
+    reply = run(lambda s: TelegramBotService(s).launch_review(
+        TG_BOB, TG_BOB, "", None, None, n8n, storage, client_id="c1"))
+    assert not reply.ok and reply.data["reason"] == "client_not_found"
+    n8n.trigger_auto_review.assert_not_awaited()
