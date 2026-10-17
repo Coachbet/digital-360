@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "9d84636b-d781-45db-88c4-c432d8ff15e9",
+      "id": "f235d5b6-93a4-487a-8c22-ff137428cc72",
       "name": "Erreur dans un workflow",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -18,7 +18,7 @@
         "assignments": {
           "assignments": [
             {
-              "id": "d2dadc80-7e9e-4b29-8317-480ccffbcf31",
+              "id": "0b7e39e0-0803-439c-8f8a-82e70ee944a4",
               "name": "admin_chat_id",
               "value": "0",
               "type": "number"
@@ -28,7 +28,7 @@
         "options": {},
         "includeOtherFields": true
       },
-      "id": "88fa4d14-3e27-4d67-954d-33c71af65386",
+      "id": "bd198983-ab61-4ba6-a2a7-a366bfc2943e",
       "name": "Configuration",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -42,7 +42,7 @@
       "parameters": {
         "jsCode": "const e = $input.first().json;\nconst lines = [\n  '🚨 Digital 360 — erreur n8n',\n  `Workflow : ${e.workflow?.name || '?'}`,\n  `Étape : ${e.execution?.lastNodeExecuted || '?'}`,\n  `Erreur : ${String(e.execution?.error?.message || 'inconnue').slice(0, 500)}`,\n  e.execution?.url ? `Exécution : ${e.execution.url}` : '',\n];\nreturn [{ json: { admin_chat_id: e.admin_chat_id, text: lines.filter(Boolean).join('\\n') } }];"
       },
-      "id": "80afc2ce-b125-4d0d-b1ff-6360beee2843",
+      "id": "7a78609d-f091-417f-8889-7dc2a93c5a69",
       "name": "Formater l'alerte",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -61,7 +61,7 @@
           "appendAttribution": false
         }
       },
-      "id": "b5baa9b4-b66b-4d3a-a948-3831b5a7c871",
+      "id": "a5762ab4-bd45-4bc7-919e-c59fa202087c",
       "name": "Prévenir l'administrateur",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,

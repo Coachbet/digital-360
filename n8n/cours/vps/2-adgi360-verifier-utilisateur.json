@@ -5,7 +5,7 @@
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "d0e8f481-60cb-4c41-97c1-52512aafd1e3",
+      "id": "7131d35b-fdc6-46e5-b496-c3b5baa0dcb8",
       "name": "Déclencheur",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -23,7 +23,7 @@
           "queryReplacement": "={{ [ $json.telegram_user_id ] }}"
         }
       },
-      "id": "9bee9cf2-a480-4c87-9221-32cbd7f4309d",
+      "id": "030b2116-9e42-4072-b3a7-21ec16cb2b2d",
       "name": "Chercher le compte",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -47,7 +47,7 @@
       "parameters": {
         "jsCode": "// Décide si l'expéditeur a accès au bot.\n// Deux conditions : compte Telegram lié à un utilisateur actif, et\n// conversation privée (dans un groupe, d'autres personnes liraient la réponse).\nconst input = $('Déclencheur').first().json;\nconst row = $input.first().json || {};\nconst isPrivate = input.chat_type === 'private';\nconst known = Boolean(row.user_id) && isPrivate;\n\nlet outcome = 'accepted';\nif (!isPrivate) outcome = 'group_refused';\nelse if (!row.user_id) outcome = 'unknown_user';\n\n// Identifiant du journal généré ici : la colonne n'a pas de défaut en base.\nconst eventId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {\n  const r = (Math.random() * 16) | 0;\n  return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);\n});\n\nreturn [{ json: {\n  ...input,\n  known,\n  outcome,\n  event_id: eventId,\n  user: known ? {\n    id: row.user_id,\n    full_name: row.full_name,\n    role: row.role,\n    organization_id: row.organization_id,\n    organization_name: row.organization_name,\n  } : null,\n} }];"
       },
-      "id": "27fe7dfe-7db7-4227-b60b-9402403c4091",
+      "id": "489333ff-6f64-44d4-b5c6-daab78dd16b1",
       "name": "Construire le profil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -64,7 +64,7 @@
           "queryReplacement": "={{ [ $json.event_id, $json.telegram_user_id, $json.user?.id ?? null, $json.user?.organization_id ?? null, $json.outcome, String($json.text || '').slice(0, 500) ] }}"
         }
       },
-      "id": "18474eec-ff8c-4295-8f08-87702fefb763",
+      "id": "f9fd9b28-6ce5-4aed-b3ed-8b2f25da8d88",
       "name": "Journaliser l'accès",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -89,7 +89,7 @@
         "jsonOutput": "={{ $('Construire le profil').first().json }}",
         "options": {}
       },
-      "id": "dfc7c1fe-1462-493c-bcec-8a1b9bfea12a",
+      "id": "0816eea9-0751-4ddb-8eda-209f02a723d6",
       "name": "Retourner le profil",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,

@@ -453,7 +453,11 @@ return [{ json: {
     f.node("Construire le clavier", "n8n-nodes-base.code", 2, {"jsCode": r"""// Transforme la liste des clients en boutons : un clic = un rapport.
 // Un client avec une seule période lance directement le rapport ; avec
 // plusieurs, un second clavier propose les périodes (les plus récentes d'abord).
-const ctx = $("Router l'intention").first().json;
+// Le Switch a plusieurs sorties : on lit l'item sur celle qui a réellement servi.
+let ctx;
+for (let branch = 0; branch < 5 && !ctx; branch++) {
+  try { ctx = $("Router l'intention").first(branch)?.json; } catch (e) { /* sortie non utilisée */ }
+}
 const res = $input.first().json;
 if (!res.ok) {
   return [{ json: { chat_id: ctx.chat_id, text: res.message, keyboard: { rows: [] } } }];

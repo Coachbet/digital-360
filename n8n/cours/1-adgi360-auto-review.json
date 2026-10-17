@@ -7,7 +7,7 @@
         "path": "auto-review",
         "options": {}
       },
-      "id": "c4003a3a-8d2b-49c1-951d-b18ac3c0f485",
+      "id": "1a727186-d388-4678-bd8c-f03e2bae9c8e",
       "name": "Webhook auto-review",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -22,7 +22,7 @@
       "parameters": {
         "jsCode": "// Contexte de la review + réglages du workflow.\n// C'est le seul endroit à modifier pour changer de modèle IA.\nconst OLLAMA_URL = 'http://host.docker.internal:11434';\nconst OLLAMA_MODEL = 'llama3.1';  // doit être déjà téléchargé : ollama pull llama3.1\n\nconst body = $input.first().json.body ?? $input.first().json;\n\nif (!body.review_id) {\n  throw new Error('Payload invalide : review_id manquant');\n}\nconst files = body.source_files || [];\nif (files.length === 0) {\n  throw new Error('Aucun fichier source pour la review ' + body.review_id);\n}\n\nconst context = {\n  review_id: body.review_id,\n  client_name: body.client?.name || 'Client',\n  client_type_label: body.client_type_label || body.client_type || '',\n  additional_info: body.additional_info || '',\n  render_callback_url: body.render_callback_url,\n  // Rappel d'échec : la review ne doit pas rester « en cours » si l'analyse plante.\n  fail_callback_url: body.fail_callback_url\n    || String(body.render_callback_url || '').replace('/render?', '/fail?'),\n  // Renseigné quand la demande vient du bot : on renverra le PowerPoint dans Telegram.\n  notify_chat_id: body.notify?.telegram_chat_id ?? null,\n  period: [...new Set(files.map((f) => f.period))].join(', '),\n  bucket: 'adgi360-files',\n  ollama_url: OLLAMA_URL,\n  ollama_model: OLLAMA_MODEL,\n};\n\n// Un item par fichier : les nœuds suivants les traitent en parallèle.\nreturn files.map((file) => ({ json: { ...context, file } }));"
       },
-      "id": "485aa415-5dad-48ff-9514-594020691a20",
+      "id": "abfad2dc-a469-4c9b-967a-9f371c5e6772",
       "name": "Préparer le contexte",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -44,7 +44,7 @@
           }
         }
       },
-      "id": "7d0e0c3c-6726-44c4-8f2d-e62e203d448d",
+      "id": "8509110c-0520-4dd9-942e-da84056c3b1f",
       "name": "Télécharger le fichier source",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -63,7 +63,7 @@
         "operation": "xlsx",
         "options": {}
       },
-      "id": "c161f08a-b9c6-4dbf-bdb4-bfd0dd951b8f",
+      "id": "b31017b2-1843-4305-b644-c24d43a64638",
       "name": "Extraire les données",
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
@@ -76,7 +76,7 @@
       "parameters": {
         "jsCode": "// L'IA ne peut pas ingérer un export complet : on lui envoie une synthèse\n// compacte — colonnes, nombre de lignes, totaux numériques et un échantillon.\nconst ctx = $('Préparer le contexte').first().json;\nconst rows = $input.all().map((item) => item.json).filter((r) => r && Object.keys(r).length);\n\nif (rows.length === 0) {\n  throw new Error('Aucune ligne extraite des fichiers sources');\n}\n\nconst columns = [...new Set(rows.flatMap(Object.keys))].slice(0, 30);\nconst totals = {};\nfor (const col of columns) {\n  const nums = rows\n    .map((r) => Number(String(r[col]).replace(/[^0-9.,-]/g, '').replace(',', '.')))\n    .filter((n) => Number.isFinite(n));\n  if (nums.length >= rows.length * 0.6 && nums.length > 0) {\n    totals[col] = {\n      somme: Number(nums.reduce((a, b) => a + b, 0).toFixed(2)),\n      moyenne: Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)),\n      min: Math.min(...nums),\n      max: Math.max(...nums),\n    };\n  }\n}\n\nconst resume = {\n  nombre_de_lignes: rows.length,\n  colonnes: columns,\n  totaux_numeriques: totals,\n  echantillon: rows.slice(0, 15),\n};\n\nreturn [{ json: { ...ctx, resume } }];"
       },
-      "id": "b91c6cf2-c0e4-405c-9d47-2b871765e94f",
+      "id": "f0cb8633-47fa-468a-937d-93879de5fa40",
       "name": "Résumer les données",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -96,7 +96,7 @@
           "timeout": 300000
         }
       },
-      "id": "0c3d7e4c-fd1e-4552-b892-b2bd626159ca",
+      "id": "ef558173-df63-4750-bc38-0394f038b100",
       "name": "Analyse IA (Ollama)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -114,7 +114,7 @@
       "parameters": {
         "jsCode": "// Ollama renvoie le JSON du modèle dans le champ « response » (chaîne).\n// On le parse ici, avec un repli lisible si le modèle s'écarte du format :\n// mieux vaut un rapport minimal qu'une exécution en échec.\nconst ctx = $('Résumer les données').first().json;\nconst raw = $input.first().json.response ?? '';\n\nlet plan;\ntry {\n  plan = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  try { plan = match ? JSON.parse(match[0]) : null; } catch { plan = null; }\n}\n\nif (!plan || !Array.isArray(plan.slides) || plan.slides.length === 0) {\n  plan = {\n    title: `Rapport de performance — ${ctx.client_name}`,\n    subtitle: ctx.period,\n    slides: [{\n      layout: 'bullets',\n      title: 'Synthèse',\n      bullets: [\n        `${ctx.resume.nombre_de_lignes} lignes analysées sur la période ${ctx.period}.`,\n        \"L'analyse automatique n'a pas produit de plan exploitable — à compléter manuellement.\",\n      ],\n    }],\n  };\n}\n\nreturn [{ json: {\n  review_id: ctx.review_id,\n  render_callback_url: ctx.render_callback_url,\n  notify_chat_id: ctx.notify_chat_id,\n  plan,\n} }];"
       },
-      "id": "a4b87056-3973-4e1e-b258-cbc9df32ffa6",
+      "id": "47d3cded-eab3-44bb-9397-580aa9d0d5c1",
       "name": "Valider le plan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -134,7 +134,7 @@
           "timeout": 180000
         }
       },
-      "id": "dd15aec4-7cf2-4460-b24e-b227af21ada4",
+      "id": "101cb92a-85e1-4860-a323-8409db1487dc",
       "name": "Renvoyer le plan au portail",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -159,7 +159,7 @@
           },
           "conditions": [
             {
-              "id": "1cd5cb69-9570-47a1-8cea-39f125d8b99a",
+              "id": "f1b90038-a6b7-4d3d-8f21-30499181d9d6",
               "leftValue": "={{ String($('Valider le plan').first().json.notify_chat_id ?? '') }}",
               "rightValue": "",
               "operator": {
@@ -174,7 +174,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "addf6017-0bbe-4cc3-812f-16296d6f5c0c",
+      "id": "00542b66-bc3d-4452-a4ab-377fecad0d7b",
       "name": "Demandé depuis Telegram ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -187,7 +187,7 @@
       "parameters": {
         "jsCode": "return [{ json: {\n  status: 'ok',\n  review_id: $('Valider le plan').first().json.review_id,\n  fichier: $('Renvoyer le plan au portail').first().json.report_filename,\n  message: 'Rapport généré — en attente de relecture dans le portail',\n} }];"
       },
-      "id": "86e031c1-f7a9-40a0-aedf-6f41540f2cd1",
+      "id": "72aced5b-caa9-4920-a673-08056d92b59a",
       "name": "Terminé",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -215,7 +215,7 @@
           ]
         }
       },
-      "id": "09b361d0-9542-40f2-8de1-fd244a2cfd28",
+      "id": "98d4a4d6-b315-49c7-9e84-3ee87d086f19",
       "name": "Lien du PowerPoint",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -248,7 +248,7 @@
           }
         }
       },
-      "id": "77eae533-6185-441e-87b9-53899235e343",
+      "id": "489bebfd-6956-4ebc-baa7-686ffb59c020",
       "name": "Récupérer le PowerPoint",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -265,7 +265,7 @@
       "parameters": {
         "jsCode": "// Résumé de 5 lignes affiché sous le fichier dans Telegram (limite : 1024 caractères).\nconst plan = $('Valider le plan').first().json.plan;\nconst ctx = $('Préparer le contexte').first().json;\nconst kpiSlide = (plan.slides || []).find((s) => s.layout === 'kpis');\nconst kpis = (kpiSlide?.kpis || []).slice(0, 4)\n  .map((k) => `• ${k.label} : ${k.value}${k.delta ? ` (${k.delta})` : ''}`);\n\nconst caption = [\n  `📊 ${plan.title || 'Rapport de performance'}`,\n  `${ctx.client_name}${ctx.period ? ' — ' + ctx.period : ''}`,\n  ...kpis,\n  '',\n  '📝 À relire et valider dans le portail avant tout envoi au client.',\n].join('\\n').slice(0, 1000);\n\n// On garde le fichier binaire : sans « binary », le PowerPoint serait perdu ici.\nreturn [{ json: { caption, chat_id: ctx.notify_chat_id }, binary: $input.first().binary }];"
       },
-      "id": "8ae5b7c2-3232-458b-9a27-83e3c74ef75f",
+      "id": "32ce112c-7fb8-45a5-82a2-ad6af555159b",
       "name": "Rédiger la légende",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -285,7 +285,7 @@
           "caption": "={{ $json.caption }}"
         }
       },
-      "id": "9e17240b-9116-4081-bc42-aa3ae020436c",
+      "id": "97905b49-e09d-43c6-bb59-43cc3a0851fa",
       "name": "Envoyer le PowerPoint",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -307,7 +307,7 @@
       "parameters": {
         "jsCode": "// Toutes les sorties d'erreur arrivent ici, après épuisement des tentatives.\nconst ctx = $('Préparer le contexte').first().json;\nconst err = $input.first().json.error;\nconst reason = (typeof err === 'string' ? err : err?.message) || 'Erreur inconnue';\nreturn [{ json: {\n  review_id: ctx.review_id,\n  client_name: ctx.client_name,\n  fail_callback_url: ctx.fail_callback_url,\n  notify_chat_id: ctx.notify_chat_id,\n  reason: String(reason).slice(0, 1500),\n} }];"
       },
-      "id": "76ccb0ed-a051-46de-9686-d73e936ea86a",
+      "id": "97125234-d446-46f7-bbb1-9d09a0d95a12",
       "name": "Préparer l'échec",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -327,7 +327,7 @@
           "timeout": 30000
         }
       },
-      "id": "568ddbc6-5308-41a3-81fa-cddbaa100ce9",
+      "id": "107d9f57-4971-4d65-b76b-f7700006cafb",
       "name": "Marquer la review en échec",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -352,7 +352,7 @@
           },
           "conditions": [
             {
-              "id": "b3f6795b-7ba5-4f85-975c-8e7902761bce",
+              "id": "4da3f566-ec85-4e1e-9de6-f8d3e1e2af16",
               "leftValue": "={{ String($('Préparer l\\'échec').first().json.notify_chat_id ?? '') }}",
               "rightValue": "",
               "operator": {
@@ -367,7 +367,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "a6cd3e3c-7b2e-4785-be1e-e8bd855d36bf",
+      "id": "85c169e0-ab96-4790-900c-6d795152dfbe",
       "name": "Prévenir sur Telegram ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -386,7 +386,7 @@
           "appendAttribution": false
         }
       },
-      "id": "22ce605a-bb92-4f17-969c-9a82ac56d421",
+      "id": "070a6021-26c5-4d07-8ba2-ef7539ccf703",
       "name": "Annoncer l'échec",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -408,7 +408,7 @@
       "parameters": {
         "errorMessage": "={{ 'Review ' + $('Préparer l\\'échec').first().json.review_id + ' : ' + $('Préparer l\\'échec').first().json.reason }}"
       },
-      "id": "478fba61-1907-42a3-ad4a-87cf1d9ad652",
+      "id": "66f9264b-c566-4ab2-bdda-fe533f151530",
       "name": "Analyse en échec",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
