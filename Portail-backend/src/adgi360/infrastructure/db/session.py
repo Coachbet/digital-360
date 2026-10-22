@@ -42,4 +42,7 @@ _ADDED_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_phone ON users (phone)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_telegram_user_id ON users (telegram_user_id)",
+    # Idempotence du bot : une mise à jour Telegram n'est traitée qu'une fois.
+    "ALTER TABLE bot_events ADD COLUMN IF NOT EXISTS update_id BIGINT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_bot_events_update_id ON bot_events (update_id)",
 )

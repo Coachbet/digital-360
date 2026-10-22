@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from adgi360.infrastructure.db.base import Base
@@ -22,6 +22,10 @@ class BotEventModel(Base):
     """
 
     __tablename__ = "bot_events"
+    # Idempotence : Telegram peut renvoyer la même mise à jour (réseau lent,
+    # webhook en échec). n8n insère avec ON CONFLICT DO NOTHING et s'arrête
+    # si la ligne existait déjà. Plusieurs NULL restent permis.
+    __table_args__ = (Index("uq_bot_events_update_id", "update_id", unique=True),)
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -32,6 +36,8 @@ class BotEventModel(Base):
     # « accepted », « unknown_user », « linked », « link_refused »…
     outcome: Mapped[str] = mapped_column(String(30), nullable=False)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Identifiant de la mise à jour Telegram (update_id), unique.
+    update_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
