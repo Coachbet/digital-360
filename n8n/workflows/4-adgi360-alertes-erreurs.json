@@ -1,0 +1,128 @@
+{
+  "name": "adgi360 – Alertes erreurs",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "97c8df26-7f03-4383-b97b-4a6279293e9c",
+      "name": "Erreur dans un workflow",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Déclenché par n8n quand un workflow qui désigne celui-ci comme « Error workflow » échoue."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "110a8825-12b7-455e-a1b4-13cb82f01839",
+              "name": "admin_chat_id",
+              "value": "6752818151",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {},
+        "includeOtherFields": true
+      },
+      "id": "41f1fd58-5dbf-483a-b4c2-378a3e8329b7",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Remplacer 0 par votre chat_id Telegram (visible dans une exécution du bot : chat.id)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst lines = [\n  '🚨 Digital 360 — erreur n8n',\n  `Workflow : ${e.workflow?.name || '?'}`,\n  `Étape : ${e.execution?.lastNodeExecuted || '?'}`,\n  `Erreur : ${String(e.execution?.error?.message || 'inconnue').slice(0, 500)}`,\n  e.execution?.url ? `Exécution : ${e.execution.url}` : '',\n];\nreturn [{ json: { admin_chat_id: e.admin_chat_id, text: lines.filter(Boolean).join('\\n') } }];"
+      },
+      "id": "bc0d4298-db9b-4bc5-8516-4626de4346b8",
+      "name": "Formater l'alerte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.admin_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "94d7e016-594c-4f80-ad3f-7baaf9f035bd",
+      "name": "Prévenir l'administrateur",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "c871bf0f-3d80-47a1-8813-9dfffc043120"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Erreur dans un workflow": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Formater l'alerte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater l'alerte": {
+      "main": [
+        [
+          {
+            "node": "Prévenir l'administrateur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8563d516-b7f0-4fc1-b406-fa1fc874f5ae",
+  "meta": {},
+  "id": "nyv1NjrfKC69p6wn",
+  "tags": []
+}

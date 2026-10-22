@@ -1,0 +1,159 @@
+{
+  "name": "adgi360 – Vérifier l'utilisateur",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "cd21b9b8-b5b4-4d26-9fb4-1da2abe5091e",
+      "name": "Déclencheur",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Appelé par le bot pour chaque message. Reçoit telegram_user_id, chat_type et text."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT u.id AS user_id, u.full_name, u.role, u.organization_id,\n       o.name AS organization_name\nFROM users u\nJOIN organizations o ON o.id = u.organization_id\nWHERE u.telegram_user_id = $1 AND u.is_active\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [ $json.telegram_user_id ] }}"
+        }
+      },
+      "id": "37663b3d-6ab2-4da3-81d7-2ee466c1e21a",
+      "name": "Chercher le compte",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ZuD68RpbEwuW7W3U",
+          "name": "adgi360 Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "alwaysOutputData : sans ligne trouvée, le flux continue avec un objet vide au lieu de s'arrêter."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Décide si l'expéditeur a accès au bot.\n// Deux conditions : compte Telegram lié à un utilisateur actif, et\n// conversation privée (dans un groupe, d'autres personnes liraient la réponse).\nconst input = $('Déclencheur').first().json;\nconst row = $input.first().json || {};\nconst isPrivate = input.chat_type === 'private';\nconst known = Boolean(row.user_id) && isPrivate;\n\nlet outcome = 'accepted';\nif (!isPrivate) outcome = 'group_refused';\nelse if (!row.user_id) outcome = 'unknown_user';\n\n// Identifiant du journal généré ici : la colonne n'a pas de défaut en base.\nconst eventId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {\n  const r = (Math.random() * 16) | 0;\n  return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);\n});\n\nreturn [{ json: {\n  ...input,\n  known,\n  outcome,\n  event_id: eventId,\n  user: known ? {\n    id: row.user_id,\n    full_name: row.full_name,\n    role: row.role,\n    organization_id: row.organization_id,\n    organization_name: row.organization_name,\n  } : null,\n} }];"
+      },
+      "id": "c2c25365-f3af-45fc-9b7e-866446386c44",
+      "name": "Construire le profil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_events\n  (id, telegram_user_id, user_id, organization_id, outcome, message, update_id, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7, now())\nON CONFLICT (update_id) DO NOTHING\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [ $json.event_id, $json.telegram_user_id, $json.user?.id ?? null, $json.user?.organization_id ?? null, $json.outcome, String($json.text || '').slice(0, 500), $json.update_id || null ] }}"
+        }
+      },
+      "id": "8c6eb7f3-2250-4cd7-94a8-a77cbcb6e408",
+      "name": "Journaliser l'accès",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ZuD68RpbEwuW7W3U",
+          "name": "adgi360 Postgres"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Trace d'accès (Loi 25) et idempotence : update_id est unique en base. Une mise à jour Telegram déjà vue n'insère rien et ne renvoie aucun id.",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ { ...$('Construire le profil').first().json, duplicate: !$json.id } }}",
+        "options": {}
+      },
+      "id": "c7475b81-1fb7-419f-ad67-18a53e6e2dba",
+      "name": "Retourner le profil",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        0
+      ],
+      "notes": "Un sous-workflow renvoie la sortie de son dernier nœud : on renvoie le profil, avec duplicate = true si ce message avait déjà été traité."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Déclencheur": {
+      "main": [
+        [
+          {
+            "node": "Chercher le compte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chercher le compte": {
+      "main": [
+        [
+          {
+            "node": "Construire le profil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire le profil": {
+      "main": [
+        [
+          {
+            "node": "Journaliser l'accès",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Journaliser l'accès": {
+      "main": [
+        [
+          {
+            "node": "Retourner le profil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "44cbe707-87de-48ce-9dfc-dbf91091f026",
+  "meta": {},
+  "id": "nWNeuyW3asuAo3mv",
+  "tags": []
+}

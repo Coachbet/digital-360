@@ -1,0 +1,1407 @@
+{
+  "name": "adgi360 – Bot Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "ddb6fed9-83ff-4392-a8cc-f21605e3b545",
+      "name": "Message Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7961fd0c-6963-4732-b2c2-38710db5b580",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      },
+      "notes": "Exige une URL HTTPS publique pour n8n (tunnel en local, domaine sur le VPS)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f022682b-ece7-436c-9be3-a07194be9dcc",
+              "name": "chat_id",
+              "value": "={{ ($json.message ?? $json.callback_query.message).chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "1876520f-c705-47f9-a056-9780f6113c9b",
+              "name": "chat_type",
+              "value": "={{ ($json.message ?? $json.callback_query.message).chat.type }}",
+              "type": "string"
+            },
+            {
+              "id": "e9ede4b8-b9e9-41c3-a61e-df5dd79fa87b",
+              "name": "telegram_user_id",
+              "value": "={{ ($json.message ?? $json.callback_query).from.id }}",
+              "type": "number"
+            },
+            {
+              "id": "71199ac4-552c-49e1-921e-9e5b2bb550da",
+              "name": "first_name",
+              "value": "={{ ($json.message ?? $json.callback_query).from.first_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ae52ed6b-ba6e-4442-b8b9-f0281d70ca52",
+              "name": "text",
+              "value": "={{ $json.callback_query ? $json.callback_query.data : ({\"📊 Rapport\": \"/rapport\", \"📁 Clients\": \"/clients\", \"⏳ Statut\": \"/statut\", \"❓ Aide\": \"/aide\"}[($json.message.text || '').trim()] ?? ($json.message.text || '').trim()) }}",
+              "type": "string"
+            },
+            {
+              "id": "d11e4a31-f48b-4314-899a-5d3354ad4f19",
+              "name": "is_callback",
+              "value": "={{ Boolean($json.callback_query) }}",
+              "type": "boolean"
+            },
+            {
+              "id": "743371d4-ae8a-4939-8fc8-b2b0cba22e48",
+              "name": "callback_id",
+              "value": "={{ $json.callback_query?.id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "3f09cc93-2e18-4863-a4fb-2c4f76d92c8c",
+              "name": "has_contact",
+              "value": "={{ Boolean($json.message?.contact) }}",
+              "type": "boolean"
+            },
+            {
+              "id": "ac6e1c9b-183c-4ca9-86e9-80cd5b80f102",
+              "name": "contact_phone",
+              "value": "={{ $json.message?.contact?.phone_number || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "2692008f-b9a9-4075-9a8c-bdbe71c07e78",
+              "name": "contact_user_id",
+              "value": "={{ $json.message?.contact?.user_id || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "a4e88666-567c-4b09-ba09-70d202474372",
+              "name": "update_id",
+              "value": "={{ $json.update_id || 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9f341351-5da8-4344-87a8-c54fdd28c0cc",
+      "name": "Extraire le message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Un message, un clic sur un bouton ou un bouton du menu deviennent tous un « text » à interpréter."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "590f50e3-2112-4126-9afb-2815d31415b5",
+              "leftValue": "={{ $json.is_callback }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "26a6def0-e7d4-4c48-8f36-74f0ea2213f4",
+      "name": "Clic sur un bouton ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "id": "b64d6bcf-5b21-4138-a285-df2c8a1de5a7",
+      "name": "Accuser le clic",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        -496
+      ],
+      "webhookId": "9696b0e4-e6ac-4251-8571-41f6ecba09d3",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Sans réponse au clic, Telegram laisse tourner un sablier sur le bouton.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9da286f2-99bc-4ebd-8c47-4883d2c853fd",
+              "leftValue": "={{ $json.has_contact }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "629ef48d-479c-422a-b6f0-946ce8d00d9b",
+      "name": "Contact partagé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/v1/bot/link",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ telegram_user_id: $json.telegram_user_id, contact_user_id: $json.contact_user_id, phone: $json.contact_phone }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b4897634-1dd5-46fb-8550-586bee489eb7",
+      "name": "Lier le compte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        -256
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1hXKujfzpEVqOUfH",
+          "name": "adgi360 Bot API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Le backend compare le numéro partagé à celui inscrit dans le portail et refuse un contact transféré."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📊 Rapport",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "📁 Clients",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⏳ Statut",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "❓ Aide",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9a12b54d-82a1-4b5f-84ee-e38293bc090a",
+      "name": "Confirmer la liaison",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        -304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "734e4273-7bd7-4c5f-806b-2991de1cb0b5",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      },
+      "notes": "Remplace le bouton « Partager mon numéro » par le menu des commandes."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "nWNeuyW3asuAo3mv",
+          "mode": "list",
+          "cachedResultName": "adgi360 – Vérifier l'utilisateur"
+        },
+        "options": {}
+      },
+      "id": "108c3a00-24bf-4303-baa1-34fc258619ff",
+      "name": "Vérifier l'utilisateur",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        48
+      ],
+      "notes": "Sous-workflow « adgi360 – Vérifier l'utilisateur »."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "82c6d9ee-c4d1-4f1b-84ee-89d919929519",
+              "leftValue": "={{ $json.known }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4d7a01cb-f8e5-46d1-8879-09f5788d93b0",
+      "name": "Utilisateur reconnu ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "={{ $json.chat_type !== 'private' ? \"Je ne réponds qu'en conversation privée, pour protéger les données de votre agence.\" : 'Bonjour ' + $json.first_name + \" 👋\\nPour accéder aux rapports de votre agence, je dois vérifier que votre numéro est inscrit dans Digital 360.\\nAppuyez sur le bouton ci-dessous.\" }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📱 Partager mon numéro",
+                    "additionalFields": {
+                      "request_contact": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6ca6662a-dfa9-44de-96e7-b2556328606d",
+      "name": "Demander le numéro",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "b767782b-eb8a-41db-a514-37c4d8d03be5",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e3d8e477-5f5e-4320-9565-3f1290a07167",
+                    "leftValue": "={{ /^(\\/|[rp]\\|)/.test($json.text) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "commande"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "texte libre"
+        }
+      },
+      "id": "643bbcf0-0fac-4dfa-a0dd-97c273e6fe0d",
+      "name": "Commande ou texte libre ?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// /rapport Maison Boréale 2026-09 -- insister sur le ROAS\n// ou un clic sur un bouton : « r|<client_id>|<période> » (lancer), « p|<client_id> » (choisir la période)\nconst ctx = $input.first().json;\n\nif (/^[rp]\\|/.test(ctx.text)) {\n  const [kind, clientId, period] = ctx.text.split('|');\n  return [{ json: {\n    ...ctx,\n    intent: kind === 'r' ? 'rapport' : 'periodes',\n    client: '',\n    client_id: clientId,\n    period: period || null,\n    instructions: null,\n    source: 'bouton',\n  } }];\n}\n\nconst [head = '', ...rest] = ctx.text.split(/\\s+/);\nconst command = head.toLowerCase().replace(/@.*$/, ''); // « /rapport@MonBot » dans un groupe\n\nlet args = rest.join(' ');\nlet instructions = null;\nconst sep = args.indexOf('--');\nif (sep >= 0) {\n  instructions = args.slice(sep + 2).trim() || null;\n  args = args.slice(0, sep).trim();\n}\n\nlet period = null;\nconst match = args.match(/\\b(\\d{4}-\\d{2})\\b/);\nif (match) {\n  period = match[1];\n  args = args.replace(match[0], '').trim();\n}\n\nconst intents = {\n  '/rapport': 'rapport', '/report': 'rapport',\n  '/statut': 'statut', '/status': 'statut',\n  '/clients': 'clients',\n  '/aide': 'aide', '/help': 'aide', '/start': 'aide',\n};\n\nreturn [{ json: {\n  ...ctx,\n  intent: intents[command] || 'aide',\n  client: args,\n  client_id: null,\n  period,\n  instructions,\n  source: 'commande',\n} }];"
+      },
+      "id": "92d14a5e-2d8d-44ed-b6be-3e15d2a2cc11",
+      "name": "Lire la commande",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Message : \"\"\"{{ $json.text }}\"\"\"",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Tu es l'assistant Telegram de Digital 360, une plateforme de rapports marketing pour agences.\nTa seule tâche : classer la demande de l'utilisateur. Tu ne réponds jamais directement à sa question.\n\nDate du jour : {{ $now.toFormat('yyyy-MM-dd') }}\n\nIntentions possibles :\n- \"rapport\" : il veut générer un rapport de performance pour un client\n- \"statut\" : il demande où en sont ses rapports\n- \"clients\" : il veut la liste de ses clients\n- \"aide\" : salutation, question hors sujet, ou demande incompréhensible\n\nRéponds UNIQUEMENT avec un objet JSON de cette forme :\n{\"intent\": \"...\", \"client\": \"nom du client ou chaîne vide\", \"period\": \"AAAA-MM ou chaîne vide\", \"instructions\": \"consignes particulières ou chaîne vide\"}\n\nPour « le mois dernier » ou un nom de mois, calcule la période à partir de la date du jour.\nN'invente jamais de nom de client : recopie celui du message."
+            }
+          ]
+        }
+      },
+      "id": "dc7f79d9-dadb-4196-bc05-13bc4bc007e1",
+      "name": "Comprendre la demande (IA)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1328,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "notes": "Transforme une phrase libre en commande. Si Ollama est hors ligne, le bot propose les commandes au lieu de planter."
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {
+          "temperature": 0,
+          "format": "json"
+        }
+      },
+      "id": "394df6e0-478b-4dfc-8f23-a28b6f7586a4",
+      "name": "Ollama",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        304
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "Izj7CH1tGQosBVsE",
+          "name": "Ollama local"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le modèle répond en texte : on parse, et tout ce qui sort du cadre retombe sur « aide ».\nconst ctx = $(\"Vérifier l'utilisateur\").first().json;\nconst raw = $input.first().json.text ?? '';\n\nlet answer = {};\ntry {\n  answer = JSON.parse(raw);\n} catch {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  try { answer = match ? JSON.parse(match[0]) : {}; } catch { answer = {}; }\n}\n\nconst allowed = ['rapport', 'statut', 'clients', 'aide'];\nreturn [{ json: {\n  ...ctx,\n  intent: allowed.includes(answer.intent) ? answer.intent : 'aide',\n  client: String(answer.client || '').trim(),\n  client_id: null,\n  period: /^\\d{4}-\\d{2}$/.test(answer.period || '') ? answer.period : null,\n  instructions: String(answer.instructions || '').trim() || null,\n  source: 'ia',\n} }];"
+      },
+      "id": "a86e6e51-b894-400e-be07-cd1628d1fe48",
+      "name": "Lire la réponse IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "Je n'arrive pas à interpréter votre message pour le moment (IA indisponible).\nUtilisez les commandes : /rapport <client>, /statut, /clients, /aide.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d122d3e5-cb9e-419c-9934-d375e9d46438",
+      "name": "IA indisponible",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1552,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "f30ea3be-13ad-4b25-8e7a-31ecc7f48df3",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "02bf043a-badf-4c98-ba26-d859ff8581a8",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "rapport",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rapport"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7356cc3b-d397-438a-8b76-8806751bc9ae",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "statut",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "statut"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "98be57a0-edc3-4588-9d73-dbfd5953cf8c",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "clients",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "clients"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2e62db5e-0e99-4d3a-8789-48447ee7f8bf",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "periodes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "periodes"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "aide"
+        }
+      },
+      "id": "21e8ee9e-1c71-4732-8f93-950e576ff924",
+      "name": "Router l'intention",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5070475b-9a68-4158-8654-3f10b587f042",
+              "leftValue": "={{ $json.client || $json.client_id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "2535a551-d9aa-4b10-9d14-2101996ff830",
+      "name": "Client précisé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1984,
+        -304
+      ],
+      "notes": "Sans client précisé, on propose la liste en boutons au lieu d'un message d'usage."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/v1/bot/reviews",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ telegram_user_id: $json.telegram_user_id, chat_id: $json.chat_id, client: $json.client, client_id: $json.client_id, period: $json.period, instructions: $json.instructions }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "f103bda5-765e-4fa3-82ed-c25779ac4701",
+      "name": "Lancer le rapport",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        -368
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1hXKujfzpEVqOUfH",
+          "name": "adgi360 Bot API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transforme la liste des clients en boutons : un clic = un rapport.\n// Un client avec une seule période lance directement le rapport ; avec\n// plusieurs, un second clavier propose les périodes (les plus récentes d'abord).\n// Le Switch a plusieurs sorties : on lit l'item sur celle qui a réellement servi.\nlet ctx;\nfor (let branch = 0; branch < 5 && !ctx; branch++) {\n  try { ctx = $(\"Router l'intention\").first(branch)?.json; } catch (e) { /* sortie non utilisée */ }\n}\nconst res = $input.first().json;\nif (!res.ok) {\n  return [{ json: { chat_id: ctx.chat_id, text: res.message, keyboard: { rows: [] } } }];\n}\nconst clients = res.clients || [];\nlet text;\nlet buttons;\n\nif (ctx.intent === 'periodes') {\n  const client = clients.find((c) => c.id === ctx.client_id);\n  const periods = client?.periods || [];\n  text = periods.length\n    ? `📅 ${client.name} : quelle période ?`\n    : `Aucun export .xlsx pour ${client?.name || 'ce client'}.`;\n  buttons = periods.slice(0, 12).map((p) => ({\n    text: p, additionalFields: { callback_data: `r|${client.id}|${p}` },\n  }));\n} else {\n  const ready = clients.filter((c) => (c.periods || []).length);\n  const waiting = clients.filter((c) => !(c.periods || []).length).map((c) => c.name);\n  const intro = ctx.intent === 'clients' ? '📁 Vos clients. Touchez-en un pour lancer son rapport :' : '📊 Pour quel client ?';\n  text = ready.length ? intro : \"Aucun client n'a encore d'export .xlsx.\";\n  if (waiting.length) text += `\\nSans données : ${waiting.join(', ')} (à déposer dans le portail, onglet Données).`;\n  buttons = ready.slice(0, 20).map((c) => ({\n    text: c.periods.length === 1 ? `${c.name} · ${c.periods[0]}` : `${c.name} ▸`,\n    additionalFields: { callback_data: c.periods.length === 1 ? `r|${c.id}|${c.periods[0]}` : `p|${c.id}` },\n  }));\n}\n\n// Deux boutons par ligne : lisible sur un téléphone.\nconst rows = [];\nfor (let i = 0; i < buttons.length; i += 2) rows.push({ row: { buttons: buttons.slice(i, i + 2) } });\n// Format natif de l'API Telegram, envoyé tel quel par le nœud HTTP suivant.\nconst inline_keyboard = [];\nfor (let i = 0; i < buttons.length; i += 2) {\n  inline_keyboard.push(buttons.slice(i, i + 2).map((b) => ({ text: b.text, callback_data: b.additionalFields.callback_data })));\n}\nreturn [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows }, reply_markup: inline_keyboard.length ? { inline_keyboard } : undefined } }];"
+      },
+      "id": "8ca0e78c-0dca-4462-9f9f-2f36208826ee",
+      "name": "Construire le clavier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, reply_markup: $json.reply_markup }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b30c15cb-420d-4c48-8750-6d04dee71694",
+      "name": "Proposer les choix",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Appel direct à l'API Telegram : le nœud Telegram n'accepte pas un clavier calculé (n8n 2.39). Le token vient de la variable d'environnement TELEGRAM_BOT_TOKEN : jamais écrit ici."
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/bot/reviews",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "telegram_user_id",
+              "value": "={{ $json.telegram_user_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e77bbe68-af8a-4c7d-a466-708fdaaa9ac2",
+      "name": "Derniers rapports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1hXKujfzpEVqOUfH",
+          "name": "adgi360 Bot API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/bot/clients",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "telegram_user_id",
+              "value": "={{ $json.telegram_user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "9b429ec1-70e9-48b4-80d7-1f5318941e4e",
+      "name": "Liste des clients",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1hXKujfzpEVqOUfH",
+          "name": "adgi360 Bot API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b10af530-ce41-4522-b2d4-1d2d09208203",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        -96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "28c5b31e-84b7-428d-a7ea-b6aba4c96fc0",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      },
+      "notes": "Le backend renvoie toujours un message prêt à afficher, succès comme refus métier."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "={{ 'Bonjour ' + ($json.user?.full_name || '') + ' 👋 (' + ($json.user?.organization_name || '') + ')\\n\\n' }}Utilisez les boutons sous la zone de saisie, ou :\n/rapport — choisir un client en un clic\n/rapport <client> [AAAA-MM] [-- consignes] — génère le rapport PowerPoint\n/statut — vos derniers rapports\n/clients — la liste de vos clients\n\nVous pouvez aussi écrire normalement, par exemple :\n« fais-moi le rapport de Maison Boréale pour septembre »",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📊 Rapport",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "📁 Clients",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⏳ Statut",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "❓ Aide",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f9135646-6d86-448d-8cb2-4b9cdc5ecfbd",
+      "name": "Aide",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2144,
+        384
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "523f34c4-1c0b-4abe-b972-de93fedf4194",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Extraire le message').first().json.chat_id }}",
+        "text": "⚠️ Le portail Digital 360 ne répond pas (3 tentatives). L'équipe technique est prévenue, réessayez dans quelques minutes.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "bda949c8-a056-4d92-9f2d-415d09700220",
+      "name": "Portail indisponible",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        560
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "5cbd97c4-277f-417e-b52c-2fe59ad4c6a7",
+      "credentials": {
+        "telegramApi": {
+          "id": "BH08el85ChzXEsL4",
+          "name": "adgi360 Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Backend injoignable depuis le bot Telegram (utilisateur {{ $('Extraire le message').first().json.telegram_user_id }})"
+      },
+      "id": "078c1b07-468e-41b0-96ae-8625dd6e502d",
+      "name": "Signaler l'échec",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        560
+      ],
+      "notes": "Fait échouer l'exécution pour déclencher le workflow d'alerte."
+    },
+    {
+      "id": "56f4dd49-2b39-4510-ad4a-c80f6c1cf846",
+      "name": "Nouveau message ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        776,
+        208
+      ],
+      "notes": "Idempotence : un message déjà traité (même update_id) s'arrête ici, sans réponse ni rapport en double.",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e34ddf94-5f72-4239-aee0-7e4822914480",
+              "leftValue": "={{ $json.duplicate !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "add1fa51-5fcb-492a-9404-adf12ce21887",
+      "name": "Test manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        224
+      ],
+      "parameters": {},
+      "notes": "Clic sur « Execute workflow » : rejoue l'exemple comme si le message venait de Telegram."
+    },
+    {
+      "id": "3b2e9d6f-aa8c-48a6-bf25-e3e5f8478235",
+      "name": "Exemple de message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        224
+      ],
+      "notes": "Même forme qu'une mise à jour Telegram. update_id = Date.now() : chaque essai est un nouveau message, l'idempotence ne le bloque pas.",
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ { update_id: Date.now(), message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: 6752818151, type: 'private', first_name: 'Louis' }, from: { id: 6752818151, is_bot: false, first_name: 'Louis' }, text: '/clients' } } }}",
+        "options": {}
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Message Telegram": {
+      "main": [
+        [
+          {
+            "node": "Extraire le message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire le message": {
+      "main": [
+        [
+          {
+            "node": "Clic sur un bouton ?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Contact partagé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clic sur un bouton ?": {
+      "main": [
+        [
+          {
+            "node": "Accuser le clic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact partagé ?": {
+      "main": [
+        [
+          {
+            "node": "Lier le compte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Vérifier l'utilisateur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lier le compte": {
+      "main": [
+        [
+          {
+            "node": "Confirmer la liaison",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Portail indisponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier l'utilisateur": {
+      "main": [
+        [
+          {
+            "node": "Nouveau message ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Utilisateur reconnu ?": {
+      "main": [
+        [
+          {
+            "node": "Commande ou texte libre ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Demander le numéro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commande ou texte libre ?": {
+      "main": [
+        [
+          {
+            "node": "Lire la commande",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Comprendre la demande (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Comprendre la demande (IA)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprendre la demande (IA)": {
+      "main": [
+        [
+          {
+            "node": "Lire la réponse IA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IA indisponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la commande": {
+      "main": [
+        [
+          {
+            "node": "Router l'intention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la réponse IA": {
+      "main": [
+        [
+          {
+            "node": "Router l'intention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router l'intention": {
+      "main": [
+        [
+          {
+            "node": "Client précisé ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Derniers rapports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Liste des clients",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Liste des clients",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client précisé ?": {
+      "main": [
+        [
+          {
+            "node": "Lancer le rapport",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Liste des clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Liste des clients": {
+      "main": [
+        [
+          {
+            "node": "Construire le clavier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Portail indisponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire le clavier": {
+      "main": [
+        [
+          {
+            "node": "Proposer les choix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lancer le rapport": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Portail indisponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Derniers rapports": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Portail indisponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Portail indisponible": {
+      "main": [
+        [
+          {
+            "node": "Signaler l'échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nouveau message ?": {
+      "main": [
+        [
+          {
+            "node": "Utilisateur reconnu ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Test manuel": {
+      "main": [
+        [
+          {
+            "node": "Exemple de message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exemple de message": {
+      "main": [
+        [
+          {
+            "node": "Extraire le message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "nyv1NjrfKC69p6wn",
+    "binaryMode": "separate"
+  },
+  "versionId": "d74c7ba0-9492-4e9a-b1fa-66fcd28c69f7",
+  "meta": {},
+  "id": "kEJvoG4a4g3nmrt1",
+  "tags": []
+}
