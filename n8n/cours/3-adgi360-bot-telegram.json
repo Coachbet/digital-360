@@ -9,7 +9,7 @@
         ],
         "additionalFields": {}
       },
-      "id": "49c699ac-94dc-427d-80cb-423830956a1d",
+      "id": "d8d345e2-ec01-447a-af77-eda7e2c0b116",
       "name": "Message Telegram",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
@@ -23,78 +23,112 @@
           "name": "adgi360 Bot"
         }
       },
-      "webhookId": "896819f0-b0f4-4af9-819d-e7668c9020fb",
+      "webhookId": "1d97520d-36b7-426b-aa97-3a6edac34497",
       "notes": "Exige une URL HTTPS publique pour n8n (tunnel en local, domaine sur le VPS)."
+    },
+    {
+      "parameters": {},
+      "id": "7cdb3059-e7d5-4364-8be9-fc120ce50904",
+      "name": "Test manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        220
+      ],
+      "notes": "Clic sur « Execute workflow » : rejoue l'exemple ci-dessous comme si le message venait de Telegram."
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ { update_id: Date.now(), message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: 0, type: 'private', first_name: 'Test' }, from: { id: 0, is_bot: false, first_name: 'Test' }, text: '/clients' } } }}",
+        "options": {}
+      },
+      "id": "c569f98e-592c-4fc4-ac66-bb578c1d652b",
+      "name": "Exemple de message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        420
+      ],
+      "notes": "Même forme qu'une mise à jour Telegram. update_id = Date.now() : chaque essai est un nouveau message, l'idempotence ne le bloque pas."
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             {
-              "id": "9262f164-b364-4f53-aabc-6c698ef8b116",
+              "id": "808f4cc8-eac8-498e-85bd-89c8c83688ce",
               "name": "chat_id",
               "value": "={{ ($json.message ?? $json.callback_query.message).chat.id }}",
               "type": "number"
             },
             {
-              "id": "02c77748-9238-4cee-842b-0a9282d1174c",
+              "id": "1576f63e-42fe-4f44-a666-219f2157b52a",
               "name": "chat_type",
               "value": "={{ ($json.message ?? $json.callback_query.message).chat.type }}",
               "type": "string"
             },
             {
-              "id": "5ab5c248-2086-4ebe-a7ac-f880f0e73fdf",
+              "id": "afde1b26-b6a7-452c-b258-6fef04ec02d6",
               "name": "telegram_user_id",
               "value": "={{ ($json.message ?? $json.callback_query).from.id }}",
               "type": "number"
             },
             {
-              "id": "c852f440-835b-46a9-9d37-99af68d1f403",
+              "id": "0a72889a-8890-4cef-bceb-4a57bc65ae1c",
               "name": "first_name",
               "value": "={{ ($json.message ?? $json.callback_query).from.first_name || '' }}",
               "type": "string"
             },
             {
-              "id": "8e63f898-a563-48f8-bfae-7bf899ed5777",
+              "id": "c304a4b4-13cc-42fd-8380-95d2bbebaa0e",
               "name": "text",
               "value": "={{ $json.callback_query ? $json.callback_query.data : ({\"📊 Rapport\": \"/rapport\", \"📁 Clients\": \"/clients\", \"⏳ Statut\": \"/statut\", \"❓ Aide\": \"/aide\"}[($json.message.text || '').trim()] ?? ($json.message.text || '').trim()) }}",
               "type": "string"
             },
             {
-              "id": "4d2792c0-5525-48de-93dd-ff3c843f2ad2",
+              "id": "d20e5088-26c1-4067-b077-3a6bf0d560ba",
               "name": "is_callback",
               "value": "={{ Boolean($json.callback_query) }}",
               "type": "boolean"
             },
             {
-              "id": "d74412ad-d8d9-403c-978f-e7f351442460",
+              "id": "96f571c0-dd21-46d2-a673-4db1c23a0602",
               "name": "callback_id",
               "value": "={{ $json.callback_query?.id || '' }}",
               "type": "string"
             },
             {
-              "id": "d4a2788a-c988-4788-b4b0-228a224db64e",
+              "id": "eb20e11a-b48d-408d-85fa-cd54556d5458",
               "name": "has_contact",
               "value": "={{ Boolean($json.message?.contact) }}",
               "type": "boolean"
             },
             {
-              "id": "b4b7edd4-bb73-4ec6-845e-18135e066946",
+              "id": "be77d80f-03c1-49ea-a4c2-8375fef29899",
               "name": "contact_phone",
               "value": "={{ $json.message?.contact?.phone_number || '' }}",
               "type": "string"
             },
             {
-              "id": "b99e2853-4100-444e-aaed-6caa1b5e57c7",
+              "id": "bacba8db-4eb3-43c5-8147-6ce79f3bfbe3",
               "name": "contact_user_id",
               "value": "={{ $json.message?.contact?.user_id || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "03cf6b97-9feb-4e11-8fdb-38f41e88d504",
+              "name": "update_id",
+              "value": "={{ $json.update_id || 0 }}",
               "type": "number"
             }
           ]
         },
         "options": {}
       },
-      "id": "224ac9f3-876a-4e62-b24c-50c0783ff2e4",
+      "id": "1e60cf23-b0af-4eb1-9709-7a25a28eee04",
       "name": "Extraire le message",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -115,7 +149,7 @@
           },
           "conditions": [
             {
-              "id": "bfe42606-7f25-47c1-b1dd-575411dec128",
+              "id": "59c57e25-eeb0-432f-956e-3c58c8f8c066",
               "leftValue": "={{ $json.is_callback }}",
               "rightValue": "",
               "operator": {
@@ -130,7 +164,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "bd676558-689b-451c-94b4-2cc087c6b895",
+      "id": "779e9a4b-56ac-4abe-9b76-c2a5881a7807",
       "name": "Clic sur un bouton ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -146,7 +180,7 @@
         "queryId": "={{ $json.callback_id }}",
         "additionalFields": {}
       },
-      "id": "91bf97b5-b058-4fa7-bbf9-5e68428aa6be",
+      "id": "05c4c438-19ac-42a4-acf5-3af89ffb6e80",
       "name": "Accuser le clic",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -161,6 +195,9 @@
         }
       },
       "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
       "notes": "Sans réponse au clic, Telegram laisse tourner un sablier sur le bouton."
     },
     {
@@ -174,7 +211,7 @@
           },
           "conditions": [
             {
-              "id": "1acac87a-ddef-4fd7-838f-4dca9dd17758",
+              "id": "995a4d7e-1a2f-4819-89ff-b36e284f3bb5",
               "leftValue": "={{ $json.has_contact }}",
               "rightValue": "",
               "operator": {
@@ -189,7 +226,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "bcd81c17-f45b-40fe-954d-15812b05c6b2",
+      "id": "a6658e8a-e1fb-4d61-9b8b-c988be8a5df8",
       "name": "Contact partagé ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -211,7 +248,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ telegram_user_id: $json.telegram_user_id, contact_user_id: $json.contact_user_id, phone: $json.contact_phone }) }}"
       },
-      "id": "dfd4a538-4cc5-4391-9b84-0299cd8f2e31",
+      "id": "e19df35a-3b8b-4fb1-b757-9120e563c16c",
       "name": "Lier le compte",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -273,7 +310,7 @@
           "resize_keyboard": true
         }
       },
-      "id": "03b346af-7616-4bad-8613-f53fa6876a57",
+      "id": "91757709-88db-48bf-b726-3cf59ab7759f",
       "name": "Confirmer la liaison",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -302,7 +339,7 @@
         },
         "options": {}
       },
-      "id": "271afc3f-9233-4394-98db-a71a45d77490",
+      "id": "4ea2ffee-83c9-464b-a21e-afac07c4150b",
       "name": "Vérifier l'utilisateur",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -323,7 +360,43 @@
           },
           "conditions": [
             {
-              "id": "05514db8-a553-4aaf-8bcc-5739d9067e1c",
+              "id": "0a0879b0-7507-4ca8-9159-37d82c1c094f",
+              "leftValue": "={{ $json.duplicate !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "9a09cb75-f850-4550-a83a-a7fba5ffb13d",
+      "name": "Nouveau message ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        240
+      ],
+      "notes": "Idempotence : un message déjà traité (même update_id) s'arrête ici, sans réponse ni rapport en double."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d7606171-5d4d-445c-93b3-323021522282",
               "leftValue": "={{ $json.known }}",
               "rightValue": "",
               "operator": {
@@ -338,7 +411,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "9f328fba-58d3-40f0-ada2-ad4dbb865c49",
+      "id": "f5e921a0-1d24-4dec-8add-9220e2553acd",
       "name": "Utilisateur reconnu ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -378,7 +451,7 @@
           "resize_keyboard": true
         }
       },
-      "id": "2fb3756e-96c5-4c9a-9f33-bd5644a5fbe0",
+      "id": "5d737810-1697-4f31-8af5-dd9030ff4f05",
       "name": "Demander le numéro",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -410,7 +483,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d3eabbe5-c373-4a8e-ad60-2f5a79fe2046",
+                    "id": "fd6e6133-ef8e-4a79-abdf-4930398eeb0b",
                     "leftValue": "={{ /^(\\/|[rp]\\|)/.test($json.text) }}",
                     "rightValue": "",
                     "operator": {
@@ -433,7 +506,7 @@
           "renameFallbackOutput": "texte libre"
         }
       },
-      "id": "d30e6876-2e25-4e9c-843c-9d3a84de3882",
+      "id": "5406b7f0-3b15-4bdf-a978-1aa60f2c9de5",
       "name": "Commande ou texte libre ?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -446,7 +519,7 @@
       "parameters": {
         "jsCode": "// /rapport Maison Boréale 2026-09 -- insister sur le ROAS\n// ou un clic sur un bouton : « r|<client_id>|<période> » (lancer), « p|<client_id> » (choisir la période)\nconst ctx = $input.first().json;\n\nif (/^[rp]\\|/.test(ctx.text)) {\n  const [kind, clientId, period] = ctx.text.split('|');\n  return [{ json: {\n    ...ctx,\n    intent: kind === 'r' ? 'rapport' : 'periodes',\n    client: '',\n    client_id: clientId,\n    period: period || null,\n    instructions: null,\n    source: 'bouton',\n  } }];\n}\n\nconst [head = '', ...rest] = ctx.text.split(/\\s+/);\nconst command = head.toLowerCase().replace(/@.*$/, ''); // « /rapport@MonBot » dans un groupe\n\nlet args = rest.join(' ');\nlet instructions = null;\nconst sep = args.indexOf('--');\nif (sep >= 0) {\n  instructions = args.slice(sep + 2).trim() || null;\n  args = args.slice(0, sep).trim();\n}\n\nlet period = null;\nconst match = args.match(/\\b(\\d{4}-\\d{2})\\b/);\nif (match) {\n  period = match[1];\n  args = args.replace(match[0], '').trim();\n}\n\nconst intents = {\n  '/rapport': 'rapport', '/report': 'rapport',\n  '/statut': 'statut', '/status': 'statut',\n  '/clients': 'clients',\n  '/aide': 'aide', '/help': 'aide', '/start': 'aide',\n};\n\nreturn [{ json: {\n  ...ctx,\n  intent: intents[command] || 'aide',\n  client: args,\n  client_id: null,\n  period,\n  instructions,\n  source: 'commande',\n} }];"
       },
-      "id": "5b1b90e3-24de-4831-ab4d-95fc141008bb",
+      "id": "9a7df10c-3223-4277-bd12-b5462758fbf4",
       "name": "Lire la commande",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -460,7 +533,7 @@
         "promptType": "define",
         "text": "=Tu es l'assistant Telegram de Digital 360, une plateforme de rapports marketing pour agences.\nClasse la demande de l'utilisateur.\n\nDate du jour : {{ $now.toFormat('yyyy-MM-dd') }}\nMessage : \"\"\"{{ $json.text }}\"\"\"\n\nIntentions possibles :\n- \"rapport\" : il veut générer un rapport de performance pour un client\n- \"statut\" : il demande où en sont ses rapports\n- \"clients\" : il veut la liste de ses clients\n- \"aide\" : salutation, question hors sujet, ou demande incompréhensible\n\nRéponds UNIQUEMENT avec un objet JSON de cette forme :\n{\"intent\": \"...\", \"client\": \"nom du client ou chaîne vide\", \"period\": \"AAAA-MM ou chaîne vide\", \"instructions\": \"consignes particulières ou chaîne vide\"}\n\nPour « le mois dernier » ou un nom de mois, calcule la période à partir de la date du jour.\nN'invente jamais de nom de client : recopie celui du message."
       },
-      "id": "c6010bc6-d48e-4e2e-90b1-1749c0c73cce",
+      "id": "2501ccd9-40c0-483c-a9a1-1e4161da888b",
       "name": "Comprendre la demande (IA)",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
@@ -482,7 +555,7 @@
           "format": "json"
         }
       },
-      "id": "ed2c098b-f160-4779-9225-b8f95aa0690c",
+      "id": "f53c39ce-1336-476a-9d11-82b4c9853d8b",
       "name": "Ollama",
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
@@ -501,7 +574,7 @@
       "parameters": {
         "jsCode": "// Le modèle répond en texte : on parse, et tout ce qui sort du cadre retombe sur « aide ».\nconst ctx = $(\"Vérifier l'utilisateur\").first().json;\nconst raw = $input.first().json.text ?? '';\n\nlet answer = {};\ntry {\n  answer = JSON.parse(raw);\n} catch {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  try { answer = match ? JSON.parse(match[0]) : {}; } catch { answer = {}; }\n}\n\nconst allowed = ['rapport', 'statut', 'clients', 'aide'];\nreturn [{ json: {\n  ...ctx,\n  intent: allowed.includes(answer.intent) ? answer.intent : 'aide',\n  client: String(answer.client || '').trim(),\n  client_id: null,\n  period: /^\\d{4}-\\d{2}$/.test(answer.period || '') ? answer.period : null,\n  instructions: String(answer.instructions || '').trim() || null,\n  source: 'ia',\n} }];"
       },
-      "id": "3e93f5f3-53f3-4e4a-a30e-a8f9db75a12f",
+      "id": "4b4b2429-4b19-48b5-99bb-2814e531fb43",
       "name": "Lire la réponse IA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -520,7 +593,7 @@
           "appendAttribution": false
         }
       },
-      "id": "24db3e3d-1039-4870-92f0-c4aebd00e7a2",
+      "id": "0830796e-f6dd-43e8-b222-4f40ce10ee6d",
       "name": "IA indisponible",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -552,7 +625,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4232c22f-00cb-41d5-afe8-de350fdc0aae",
+                    "id": "a1e5ce26-e518-414d-a487-65a0ea88995c",
                     "leftValue": "={{ $json.intent }}",
                     "rightValue": "rapport",
                     "operator": {
@@ -576,7 +649,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "1449f002-65dc-42cc-b635-df254d5c1d5c",
+                    "id": "0d5c6984-ee42-43f2-aae9-a67ce6780c6d",
                     "leftValue": "={{ $json.intent }}",
                     "rightValue": "statut",
                     "operator": {
@@ -600,7 +673,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2a3d3e51-7d46-4d4b-b524-c3e9341864ed",
+                    "id": "f97e1e44-d1b5-4210-9e6d-120f3dff05a6",
                     "leftValue": "={{ $json.intent }}",
                     "rightValue": "clients",
                     "operator": {
@@ -624,7 +697,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "7f7fb85d-6e9c-49cd-a689-a5268da2eaf5",
+                    "id": "57e77c75-79e3-49ab-ada8-979c97b99595",
                     "leftValue": "={{ $json.intent }}",
                     "rightValue": "periodes",
                     "operator": {
@@ -646,7 +719,7 @@
           "renameFallbackOutput": "aide"
         }
       },
-      "id": "bb9e3d27-e374-4e42-b731-a7e9cc9d71a9",
+      "id": "921b8059-1845-4350-b29e-207e12215af7",
       "name": "Router l'intention",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -666,7 +739,7 @@
           },
           "conditions": [
             {
-              "id": "c7883bf6-3191-478c-9952-8e0e611277de",
+              "id": "80619467-6403-4ac5-ae4b-d6d568b165f6",
               "leftValue": "={{ $json.client || $json.client_id || '' }}",
               "rightValue": "",
               "operator": {
@@ -681,7 +754,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "f730a0ed-3959-4910-9b44-7007e48d2537",
+      "id": "95c8ec82-08d5-4768-8b8d-8e223134538c",
       "name": "Client précisé ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -704,7 +777,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ telegram_user_id: $json.telegram_user_id, chat_id: $json.chat_id, client: $json.client, client_id: $json.client_id, period: $json.period, instructions: $json.instructions }) }}"
       },
-      "id": "bb0565d8-7ad0-4914-a278-b707ff5b42f6",
+      "id": "5bfeb6a8-bd93-4426-8188-902b0105cdde",
       "name": "Lancer le rapport",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -725,9 +798,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// Transforme la liste des clients en boutons : un clic = un rapport.\n// Un client avec une seule période lance directement le rapport ; avec\n// plusieurs, un second clavier propose les périodes (les plus récentes d'abord).\nconst ctx = $(\"Router l'intention\").first().json;\nconst res = $input.first().json;\nif (!res.ok) {\n  return [{ json: { chat_id: ctx.chat_id, text: res.message, keyboard: { rows: [] } } }];\n}\nconst clients = res.clients || [];\nlet text;\nlet buttons;\n\nif (ctx.intent === 'periodes') {\n  const client = clients.find((c) => c.id === ctx.client_id);\n  const periods = client?.periods || [];\n  text = periods.length\n    ? `📅 ${client.name} : quelle période ?`\n    : `Aucun export .xlsx pour ${client?.name || 'ce client'}.`;\n  buttons = periods.slice(0, 12).map((p) => ({\n    text: p, additionalFields: { callback_data: `r|${client.id}|${p}` },\n  }));\n} else {\n  const ready = clients.filter((c) => (c.periods || []).length);\n  const waiting = clients.filter((c) => !(c.periods || []).length).map((c) => c.name);\n  const intro = ctx.intent === 'clients' ? '📁 Vos clients. Touchez-en un pour lancer son rapport :' : '📊 Pour quel client ?';\n  text = ready.length ? intro : \"Aucun client n'a encore d'export .xlsx.\";\n  if (waiting.length) text += `\\nSans données : ${waiting.join(', ')} (à déposer dans le portail, onglet Données).`;\n  buttons = ready.slice(0, 20).map((c) => ({\n    text: c.periods.length === 1 ? `${c.name} · ${c.periods[0]}` : `${c.name} ▸`,\n    additionalFields: { callback_data: c.periods.length === 1 ? `r|${c.id}|${c.periods[0]}` : `p|${c.id}` },\n  }));\n}\n\n// Deux boutons par ligne : lisible sur un téléphone.\nconst rows = [];\nfor (let i = 0; i < buttons.length; i += 2) rows.push({ row: { buttons: buttons.slice(i, i + 2) } });\nreturn [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows } } }];"
+        "jsCode": "// Transforme la liste des clients en boutons : un clic = un rapport.\n// Un client avec une seule période lance directement le rapport ; avec\n// plusieurs, un second clavier propose les périodes (les plus récentes d'abord).\n// Le Switch a plusieurs sorties : on lit l'item sur celle qui a réellement servi.\nlet ctx;\nfor (let branch = 0; branch < 5 && !ctx; branch++) {\n  try { ctx = $(\"Router l'intention\").first(branch)?.json; } catch (e) { /* sortie non utilisée */ }\n}\nconst res = $input.first().json;\nif (!res.ok) {\n  return [{ json: { chat_id: ctx.chat_id, text: res.message, keyboard: { rows: [] } } }];\n}\nconst clients = res.clients || [];\nlet text;\nlet buttons;\n\nif (ctx.intent === 'periodes') {\n  const client = clients.find((c) => c.id === ctx.client_id);\n  const periods = client?.periods || [];\n  text = periods.length\n    ? `📅 ${client.name} : quelle période ?`\n    : `Aucun export .xlsx pour ${client?.name || 'ce client'}.`;\n  buttons = periods.slice(0, 12).map((p) => ({\n    text: p, additionalFields: { callback_data: `r|${client.id}|${p}` },\n  }));\n} else {\n  const ready = clients.filter((c) => (c.periods || []).length);\n  const waiting = clients.filter((c) => !(c.periods || []).length).map((c) => c.name);\n  const intro = ctx.intent === 'clients' ? '📁 Vos clients. Touchez-en un pour lancer son rapport :' : '📊 Pour quel client ?';\n  text = ready.length ? intro : \"Aucun client n'a encore d'export .xlsx.\";\n  if (waiting.length) text += `\\nSans données : ${waiting.join(', ')} (à déposer dans le portail, onglet Données).`;\n  buttons = ready.slice(0, 20).map((c) => ({\n    text: c.periods.length === 1 ? `${c.name} · ${c.periods[0]}` : `${c.name} ▸`,\n    additionalFields: { callback_data: c.periods.length === 1 ? `r|${c.id}|${c.periods[0]}` : `p|${c.id}` },\n  }));\n}\n\n// Deux boutons par ligne : lisible sur un téléphone.\nconst rows = [];\nfor (let i = 0; i < buttons.length; i += 2) rows.push({ row: { buttons: buttons.slice(i, i + 2) } });\n// Format natif de l'API Telegram, envoyé tel quel par le nœud HTTP suivant.\nconst inline_keyboard = [];\nfor (let i = 0; i < buttons.length; i += 2) {\n  inline_keyboard.push(buttons.slice(i, i + 2).map((b) => ({ text: b.text, callback_data: b.additionalFields.callback_data })));\n}\nreturn [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows }, reply_markup: inline_keyboard.length ? { inline_keyboard } : undefined } }];"
       },
-      "id": "39b2564d-24bd-4380-aaf5-a6a6267f62f3",
+      "id": "54559459-8972-4acf-8e14-286e7b3a7a1f",
       "name": "Construire le clavier",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -738,34 +811,27 @@
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.text }}",
-        "additionalFields": {
-          "appendAttribution": false
-        },
-        "replyMarkup": "inlineKeyboard",
-        "inlineKeyboard": "={{ $json.keyboard }}"
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, reply_markup: $json.reply_markup }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "1d4617d9-df5f-4ee9-a060-e17c12776194",
+      "id": "e4f313cc-10cf-49d2-ad13-42455f868cd5",
       "name": "Proposer les choix",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2640,
         200
       ],
-      "credentials": {
-        "telegramApi": {
-          "id": "",
-          "name": "adgi360 Bot"
-        }
-      },
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
-      "notes": "Le clavier est construit par le nœud précédent : autant de boutons que de clients."
+      "notes": "Appel direct à l'API Telegram : le nœud Telegram n'accepte pas un clavier calculé (n8n 2.39). Le token vient de la variable d'environnement TELEGRAM_BOT_TOKEN : jamais écrit ici."
     },
     {
       "parameters": {
@@ -790,7 +856,7 @@
           ]
         }
       },
-      "id": "e763eb52-c152-4fea-abb7-22b0aba4f288",
+      "id": "9044da5b-c8eb-4759-8a05-0b0faa574fe6",
       "name": "Derniers rapports",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -828,7 +894,7 @@
           ]
         }
       },
-      "id": "1235571b-6e75-4a8b-b225-6d5668977514",
+      "id": "62839ae0-6e90-4b7c-a4c4-19c5383bfd3a",
       "name": "Liste des clients",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -857,7 +923,7 @@
           "appendAttribution": false
         }
       },
-      "id": "c0d3c587-1ab2-4340-9fc4-2b7aa8a26c82",
+      "id": "01b24198-bdbb-4db3-ba4e-6789b577bd2e",
       "name": "Répondre",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -918,7 +984,7 @@
           "resize_keyboard": true
         }
       },
-      "id": "3acec0bd-1dfb-4868-8ff9-259cb158c4fb",
+      "id": "b2b1152e-0e88-479c-9a4f-e7e7854b07b7",
       "name": "Aide",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -946,7 +1012,7 @@
           "appendAttribution": false
         }
       },
-      "id": "3bcd3d93-b7ec-4761-8a54-9a02b69ec72a",
+      "id": "7cab67c5-c340-455e-97e7-9fa2d97d7ee2",
       "name": "Portail indisponible",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -968,7 +1034,7 @@
       "parameters": {
         "errorMessage": "=Backend injoignable depuis le bot Telegram (utilisateur {{ $('Extraire le message').first().json.telegram_user_id }})"
       },
-      "id": "7b93a7d1-8d5d-4569-92cd-e96059a46c56",
+      "id": "3da92f84-e146-468f-b9f5-a2756c2dda3c",
       "name": "Signaler l'échec",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
@@ -1058,7 +1124,40 @@
       "main": [
         [
           {
+            "node": "Nouveau message ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nouveau message ?": {
+      "main": [
+        [
+          {
             "node": "Utilisateur reconnu ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test manuel": {
+      "main": [
+        [
+          {
+            "node": "Exemple de message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exemple de message": {
+      "main": [
+        [
+          {
+            "node": "Extraire le message",
             "type": "main",
             "index": 0
           }

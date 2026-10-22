@@ -1,2 +1,29 @@
+# --- Secrets : seuls les modèles *.example sont versionnés -----------------
+.env
+.env.*
+!*.example
+deploy/.env.prod
+
+# --- Données de volumes Docker montées en local ----------------------------
+postgres_data/
+minio_data/
+n8n_data/
+ollama_data/
+.n8n/
+
+# --- Python / Node ----------------------------------------------------------
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+
+# --- Fichiers de travail ----------------------------------------------------
 .DS_Store
 *.log
+tmp/
+outputs/
+_to_delete/
+*.tgz
+*.tar.gz

@@ -1,56 +1,99 @@
+# Pile locale de développement : PostgreSQL (base du projet), MinIO (fichiers)
+# et n8n (automatisations, dont le bot Telegram).
+#
+#   cp .env.example .env      # puis remplir N8N_ENCRYPTION_KEY et TELEGRAM_BOT_TOKEN
+#   docker compose up -d
+#
+# Aucun secret dans ce fichier : tout vient de .env (ignoré par Git).
+# Les versions d'images sont figées pour que deux machines lancent la même pile.
+name: adgi360
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: adgi360-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: adgi360
-      POSTGRES_PASSWORD: adgi360
-      POSTGRES_DB: adgi360
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      - "5433:5432"   # 5432 souvent déjà pris sur le poste
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U adgi360"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: adgi360-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: adgi360
-      MINIO_ROOT_PASSWORD: adgi360secret
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"   # API S3
-      - "9001:9001"   # Console web
+      - "9001:9001"   # console web
     volumes:
       - minio_data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Crée automatiquement le bucket au démarrage, puis s'arrête.
+  # Crée le bucket au premier démarrage, puis s'arrête.
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: adgi360-minio-init
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 adgi360 adgi360secret;
-      mc mb --ignore-existing local/adgi360-files;
-      mc anonymous set public local/adgi360-files || mc policy set public local/adgi360-files;
-      echo 'Bucket adgi360-files prêt (accès anonyme activé pour le développement local)';
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/${S3_BUCKET};
+      mc anonymous set public local/${S3_BUCKET} || true;
+      echo 'Bucket ${S3_BUCKET} prêt (accès anonyme : développement local uniquement)';
       "
+
+  n8n:
+    image: n8nio/n8n:2.39.10
+    container_name: adgi360-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Chiffre les credentials enregistrés dans n8n. À garder : la perdre
+      # rend les credentials illisibles.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Le token du bot reste dans .env. Le workflow le lit avec
+      # {{ $env.TELEGRAM_BOT_TOKEN }} : il n'apparaît ni dans le JSON exporté
+      # ni à l'écran.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      GENERIC_TIMEZONE: America/Toronto
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"   # http://localhost
+    extra_hosts:
+      # Backend et Ollama tournent sur le poste : n8n les joint par cette adresse.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:
   minio_data:
+  n8n_data:

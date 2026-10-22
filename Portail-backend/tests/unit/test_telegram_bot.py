@@ -197,3 +197,74 @@ def test_button_with_other_agency_client_id_is_refused():
         TG_BOB, TG_BOB, "", None, None, n8n, storage, client_id="c1"))
     assert not reply.ok and reply.data["reason"] == "client_not_found"
     n8n.trigger_auto_review.assert_not_awaited()
+
+
+def test_same_report_twice_is_not_launched_twice():
+    """Idempotence : double clic sur le bouton = un seul rapport, une seule analyse."""
+    n8n, storage = _mocks()
+
+    async def scenario(s):
+        from sqlalchemy import func, select
+
+        s.add(DataFileModel(organization_id="org-a", client_id="c1", period="2026-09",
+                            filename="export.xlsx", storage_key="k1"))
+        await s.commit()
+        service = TelegramBotService(s)
+        await service.link(TG_ALICE, TG_ALICE, "+15145551234")
+        first = await service.launch_review(TG_ALICE, TG_ALICE, "", "2026-09", None,
+                                            n8n, storage, client_id="c1")
+        second = await service.launch_review(TG_ALICE, TG_ALICE, "", "2026-09", None,
+                                             n8n, storage, client_id="c1")
+        count = await s.scalar(select(func.count()).select_from(ReviewRequestModel))
+        return first, second, count
+
+    first, second, count = run(scenario)
+    assert first.ok and not first.data.get("duplicate")
+    assert second.ok and second.data["duplicate"] is True
+    assert second.data["review_id"] == first.data["review_id"]
+    assert "déjà en cours" in second.message
+    assert count == 1
+    n8n.trigger_auto_review.assert_awaited_once()
+
+
+def test_finished_report_can_be_launched_again():
+    """Un rapport terminé n'est pas un doublon : on peut le relancer."""
+    n8n, storage = _mocks()
+
+    async def scenario(s):
+        s.add(DataFileModel(organization_id="org-a", client_id="c1", period="2026-09",
+                            filename="export.xlsx", storage_key="k1"))
+        await s.commit()
+        service = TelegramBotService(s)
+        await service.link(TG_ALICE, TG_ALICE, "+15145551234")
+        first = await service.launch_review(TG_ALICE, TG_ALICE, "", "2026-09", None,
+                                            n8n, storage, client_id="c1")
+        review = await s.get(ReviewRequestModel, first.data["review_id"])
+        review.status = "awaiting_approval"
+        await s.commit()
+        return await service.launch_review(TG_ALICE, TG_ALICE, "", "2026-09", None,
+                                           n8n, storage, client_id="c1")
+
+    again = run(scenario)
+    assert again.ok and not again.data.get("duplicate")
+    assert n8n.trigger_auto_review.await_count == 2
+
+
+def test_bot_event_update_id_is_unique():
+    """Base de l'idempotence côté n8n : un même update_id ne s'insère qu'une fois."""
+    from sqlalchemy.exc import IntegrityError
+
+    from adgi360.infrastructure.db.models.bot_event import BotEventModel
+
+    async def scenario(s):
+        s.add(BotEventModel(telegram_user_id=TG_ALICE, outcome="accepted", update_id=42))
+        await s.commit()
+        s.add(BotEventModel(telegram_user_id=TG_ALICE, outcome="accepted", update_id=42))
+        try:
+            await s.commit()
+        except IntegrityError:
+            await s.rollback()
+            return "refused"
+        return "inserted"
+
+    assert run(scenario) == "refused"

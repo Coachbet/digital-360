@@ -1,4 +1,5 @@
 # Pile de production Digital 360 — un seul serveur, tout en conteneurs.
+# Versions d'images figées : un redéploiement ne change jamais de version en douce.
 #
 # Principe : rien n'est publié sur Internet sauf Caddy (80/443). Postgres,
 # MinIO, le backend et n8n ne sont joignables que par le réseau interne Docker.
@@ -77,7 +78,7 @@ services:
       retries: 5
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -95,7 +96,7 @@ services:
       retries: 5
 
   minio-init:
-    image: quay.io/minio/mc:latest
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       minio:
         condition: service_healthy
@@ -111,7 +112,7 @@ services:
       "
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.39.10
     restart: unless-stopped
     environment:
       N8N_HOST: ${N8N_DOMAIN}
@@ -124,17 +125,30 @@ services:
       # Chiffre les identifiants stockés par n8n. À conserver : la perdre rend
       # les credentials enregistrés illisibles.
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Token du bot Telegram, lu par le workflow avec {{ $env.TELEGRAM_BOT_TOKEN }}
+      # (nœud « Proposer les choix ») : il n'est jamais écrit dans un workflow,
+      # donc ni dans le JSON exporté dans Git, ni visible à l'écran.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       GENERIC_TIMEZONE: America/Toronto
       N8N_DIAGNOSTICS_ENABLED: "false"
     volumes:
       - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
   # IA locale. Facultative : démarrée seulement avec --profile ollama.
   # Compter au moins 8 Go de RAM libres pour un modèle 8B quantifié, et
   # accepter une génération lente sans GPU (quelques minutes par rapport).
   # L'alternative documentée dans DEPLOIEMENT.md est d'appeler une API.
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.34.2
     restart: unless-stopped
     profiles: ["ollama"]
     volumes:
