@@ -21,7 +21,7 @@ Deux principes :
 
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +55,18 @@ STATUS_ICONS = {
     ReviewStatus.FAILED.value: "❌",
 }
 
+
+
+# Fenêtre pendant laquelle une même demande de rapport est considérée comme un
+# doublon (l'analyse prend 1 à 3 minutes ; 20 minutes laissent de la marge).
+DUPLICATE_WINDOW = timedelta(minutes=20)
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """SQLite rend des dates naïves, Postgres des dates avec fuseau."""
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 @dataclass
 class BotReply:
@@ -282,6 +294,27 @@ class TelegramBotService:
                 {"reason": "period_not_found"},
             )
 
+        # Idempotence : un double clic, ou la même commande renvoyée, ne doit
+        # pas créer un deuxième rapport ni relancer l'analyse IA. Si le même
+        # rapport (même client, mêmes fichiers) est déjà en cours, on le dit.
+        existing = await self._review_in_progress(
+            user.organization_id, client.id, {f.id for f in files}
+        )
+        if existing is not None:
+            started = _as_utc(existing.created_at)
+            since = f" depuis {started.strftime('%H:%M')} (UTC)" if started else ""
+            return BotReply(
+                True,
+                f"⏳ Le rapport {client.name} ({chosen_period}) est déjà en cours{since}.\n"
+                "Je n'en lance pas un deuxième : le PowerPoint arrivera ici dès qu'il est prêt.",
+                {
+                    "review_id": existing.id,
+                    "client_name": client.name,
+                    "period": chosen_period,
+                    "duplicate": True,
+                },
+            )
+
         # Même cas d'usage que le portail : mêmes contrôles, même contrat n8n.
         try:
             review = await LaunchAutoReviewUseCase(self._session, n8n, storage).execute(
@@ -307,6 +340,34 @@ class TelegramBotService:
                 "files": [f.filename for f in files],
             },
         )
+
+    async def _review_in_progress(
+        self, organization_id: str, client_id: str, file_ids: set[str]
+    ) -> ReviewRequestModel | None:
+        """Rapport identique encore en file ou en cours d'analyse, s'il existe.
+
+        Au-delà de DUPLICATE_WINDOW, une demande restée « en cours » est
+        considérée comme bloquée : on autorise alors une nouvelle tentative.
+        """
+        result = await self._session.execute(
+            select(ReviewRequestModel)
+            .where(
+                ReviewRequestModel.organization_id == organization_id,
+                ReviewRequestModel.client_id == client_id,
+                ReviewRequestModel.status.in_(
+                    [ReviewStatus.PENDING.value, ReviewStatus.PROCESSING.value]
+                ),
+            )
+            .order_by(ReviewRequestModel.created_at.desc())
+        )
+        limit = datetime.now(UTC) - DUPLICATE_WINDOW
+        for review in result.scalars().all():
+            created = _as_utc(review.created_at)
+            if created is not None and created < limit:
+                continue
+            if set(review.data_file_ids or []) == file_ids:
+                return review
+        return None
 
     async def recent_reviews(self, telegram_user_id: int, limit: int = 5) -> BotReply:
         user = await self._user_by_telegram(telegram_user_id)
