@@ -5,7 +5,7 @@
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "7131d35b-fdc6-46e5-b496-c3b5baa0dcb8",
+      "id": "5d22d2b8-4e45-4a25-9a38-1cd96ce8eb24",
       "name": "Déclencheur",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -23,7 +23,7 @@
           "queryReplacement": "={{ [ $json.telegram_user_id ] }}"
         }
       },
-      "id": "030b2116-9e42-4072-b3a7-21ec16cb2b2d",
+      "id": "5e7aa166-7ae5-4046-9c89-cc99aa1483a6",
       "name": "Chercher le compte",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -47,7 +47,7 @@
       "parameters": {
         "jsCode": "// Décide si l'expéditeur a accès au bot.\n// Deux conditions : compte Telegram lié à un utilisateur actif, et\n// conversation privée (dans un groupe, d'autres personnes liraient la réponse).\nconst input = $('Déclencheur').first().json;\nconst row = $input.first().json || {};\nconst isPrivate = input.chat_type === 'private';\nconst known = Boolean(row.user_id) && isPrivate;\n\nlet outcome = 'accepted';\nif (!isPrivate) outcome = 'group_refused';\nelse if (!row.user_id) outcome = 'unknown_user';\n\n// Identifiant du journal généré ici : la colonne n'a pas de défaut en base.\nconst eventId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {\n  const r = (Math.random() * 16) | 0;\n  return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);\n});\n\nreturn [{ json: {\n  ...input,\n  known,\n  outcome,\n  event_id: eventId,\n  user: known ? {\n    id: row.user_id,\n    full_name: row.full_name,\n    role: row.role,\n    organization_id: row.organization_id,\n    organization_name: row.organization_name,\n  } : null,\n} }];"
       },
-      "id": "489333ff-6f64-44d4-b5c6-daab78dd16b1",
+      "id": "eca25b01-87da-42a1-a34e-1f3027bd1b31",
       "name": "Construire le profil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -59,12 +59,12 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO bot_events\n  (id, telegram_user_id, user_id, organization_id, outcome, message, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, now());",
+        "query": "INSERT INTO bot_events\n  (id, telegram_user_id, user_id, organization_id, outcome, message, update_id, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7, now())\nON CONFLICT (update_id) DO NOTHING\nRETURNING id;",
         "options": {
-          "queryReplacement": "={{ [ $json.event_id, $json.telegram_user_id, $json.user?.id ?? null, $json.user?.organization_id ?? null, $json.outcome, String($json.text || '').slice(0, 500) ] }}"
+          "queryReplacement": "={{ [ $json.event_id, $json.telegram_user_id, $json.user?.id ?? null, $json.user?.organization_id ?? null, $json.outcome, String($json.text || '').slice(0, 500), $json.update_id || null ] }}"
         }
       },
-      "id": "f9fd9b28-6ce5-4aed-b3ed-8b2f25da8d88",
+      "id": "2aaba6ae-5479-464c-9b99-fcb93f3cea8f",
       "name": "Journaliser l'accès",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -78,18 +78,19 @@
           "name": "adgi360 Postgres"
         }
       },
+      "alwaysOutputData": true,
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
-      "notes": "Trace d'accès (Loi 25) : qui a écrit au bot, quand, et si l'accès a été accordé."
+      "notes": "Trace d'accès (Loi 25) et idempotence : update_id est unique en base. Une mise à jour Telegram déjà vue n'insère rien et ne renvoie aucun id."
     },
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "={{ $('Construire le profil').first().json }}",
+        "jsonOutput": "={{ { ...$('Construire le profil').first().json, duplicate: !$json.id } }}",
         "options": {}
       },
-      "id": "0816eea9-0751-4ddb-8eda-209f02a723d6",
+      "id": "fdea60a8-66bc-4269-a572-3736ca5bd460",
       "name": "Retourner le profil",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -97,7 +98,7 @@
         880,
         0
       ],
-      "notes": "Un sous-workflow renvoie la sortie de son dernier nœud : on renvoie le profil, pas le résultat de l'INSERT."
+      "notes": "Un sous-workflow renvoie la sortie de son dernier nœud : on renvoie le profil, avec duplicate = true si ce message avait déjà été traité."
     }
   ],
   "connections": {

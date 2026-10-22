@@ -33,6 +33,8 @@ POSTGRES_CRED = {"postgres": {"id": "", "name": "adgi360 Postgres"}}
 OLLAMA_CRED = {"ollamaApi": {"id": "", "name": "Ollama local"}}
 
 RETRY = {"retryOnFail": True, "maxTries": 3, "waitBetweenTries": 3000}
+# Identifiant Telegram du compte de test (le vôtre, lié dans le portail).
+TEST_CHAT_ID = 0
 CHAT = "={{ $('Extraire le message').first().json.chat_id }}"
 
 
@@ -214,21 +216,25 @@ return [{ json: {
         "operation": "executeQuery",
         "query": (
             "INSERT INTO bot_events\n"
-            "  (id, telegram_user_id, user_id, organization_id, outcome, message, created_at)\n"
-            "VALUES ($1, $2, $3, $4, $5, $6, now());"
+            "  (id, telegram_user_id, user_id, organization_id, outcome, message, update_id, created_at)\n"
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, now())\n"
+            "ON CONFLICT (update_id) DO NOTHING\n"
+            "RETURNING id;"
         ),
         "options": {"queryReplacement": (
             "={{ [ $json.event_id, $json.telegram_user_id, $json.user?.id ?? null, "
             "$json.user?.organization_id ?? null, $json.outcome, "
-            "String($json.text || '').slice(0, 500) ] }}"
+            "String($json.text || '').slice(0, 500), $json.update_id || null ] }}"
         )},
-    }, (660, 0), credentials=POSTGRES_CRED, **RETRY,
-       notes="Trace d'accès (Loi 25) : qui a écrit au bot, quand, et si l'accès a été accordé.")
+    }, (660, 0), credentials=POSTGRES_CRED, alwaysOutputData=True, **RETRY,
+       notes="Trace d'accès (Loi 25) et idempotence : update_id est unique en base. "
+             "Une mise à jour Telegram déjà vue n'insère rien et ne renvoie aucun id.")
     f.node("Retourner le profil", "n8n-nodes-base.set", 3.4, {
         "mode": "raw",
-        "jsonOutput": "={{ $('Construire le profil').first().json }}",
+        "jsonOutput": "={{ { ...$('Construire le profil').first().json, duplicate: !$json.id } }}",
         "options": {},
-    }, (880, 0), notes="Un sous-workflow renvoie la sortie de son dernier nœud : on renvoie le profil, pas le résultat de l'INSERT.")
+    }, (880, 0), notes="Un sous-workflow renvoie la sortie de son dernier nœud : on renvoie le profil, "
+             "avec duplicate = true si ce message avait déjà été traité.")
     f.link("Déclencheur", "Chercher le compte")
     f.link("Chercher le compte", "Construire le profil")
     f.link("Construire le profil", "Journaliser l'accès")
@@ -285,6 +291,19 @@ def bot_telegram():
            {"updates": ["message", "callback_query"], "additionalFields": {}}, (0, y),
            credentials=TELEGRAM_CRED, webhookId=str(uuid.uuid4()),
            notes="Exige une URL HTTPS publique pour n8n (tunnel en local, domaine sur le VPS).")
+    # Déclencheur à la demande : rejoue un vrai message Telegram sans téléphone.
+    f.node("Test manuel", "n8n-nodes-base.manualTrigger", 1, {}, (0, y + 220),
+           notes="Clic sur « Execute workflow » : rejoue l'exemple ci-dessous comme si le message venait de Telegram.")
+    f.node("Exemple de message", "n8n-nodes-base.set", 3.4, {
+        "mode": "raw",
+        "jsonOutput": "={{ { update_id: Date.now(), message: { message_id: 1, "
+                      "date: Math.floor(Date.now() / 1000), "
+                      "chat: { id: TEST_CHAT_ID, type: 'private', first_name: 'Test' }, "
+                      "from: { id: TEST_CHAT_ID, is_bot: false, first_name: 'Test' }, "
+                      "text: '/clients' } } }}".replace("TEST_CHAT_ID", str(TEST_CHAT_ID)),
+        "options": {},
+    }, (0, y + 420), notes="Même forme qu'une mise à jour Telegram. update_id = Date.now() : "
+                           "chaque essai est un nouveau message, l'idempotence ne le bloque pas.")
     f.node("Extraire le message", "n8n-nodes-base.set", 3.4, assignments(
         ("chat_id", "={{ ($json.message ?? $json.callback_query.message).chat.id }}", "number"),
         ("chat_type", "={{ ($json.message ?? $json.callback_query.message).chat.type }}", "string"),
@@ -297,6 +316,7 @@ def bot_telegram():
         ("has_contact", "={{ Boolean($json.message?.contact) }}", "boolean"),
         ("contact_phone", "={{ $json.message?.contact?.phone_number || '' }}", "string"),
         ("contact_user_id", "={{ $json.message?.contact?.user_id || 0 }}", "number"),
+        ("update_id", "={{ $json.update_id || 0 }}", "number"),
     ), (220, y), notes="Un message, un clic sur un bouton ou un bouton du menu deviennent tous un « text » à interpréter.")
     f.node("Clic sur un bouton ?", "n8n-nodes-base.if", 2.2,
            if_params(cond("={{ $json.is_callback }}", "boolean", "true", single=True)), (440, y - 480))
@@ -305,7 +325,7 @@ def bot_telegram():
         "operation": "answerQuery",
         "queryId": "={{ $json.callback_id }}",
         "additionalFields": {},
-    }, (660, y - 500), credentials=TELEGRAM_CRED, onError="continueRegularOutput",
+    }, (660, y - 500), credentials=TELEGRAM_CRED, onError="continueRegularOutput", **RETRY,
        notes="Sans réponse au clic, Telegram laisse tourner un sablier sur le bouton.")
     f.node("Contact partagé ?", "n8n-nodes-base.if", 2.2,
            if_params(cond("={{ $json.has_contact }}", "boolean", "true", single=True)), (440, y))
@@ -328,6 +348,9 @@ def bot_telegram():
                        "cachedResultName": "adgi360 – Vérifier l'utilisateur"},
         "options": {},
     }, (660, y + 40), notes="Sous-workflow : à sélectionner dans la liste après import.")
+    f.node("Nouveau message ?", "n8n-nodes-base.if", 2.2,
+           if_params(cond("={{ $json.duplicate !== true }}", "boolean", "true", single=True)), (660, y + 240),
+           notes="Idempotence : un message déjà traité (même update_id) s'arrête ici, sans réponse ni rapport en double.")
     f.node("Utilisateur reconnu ?", "n8n-nodes-base.if", 2.2,
            if_params(cond("={{ $json.known }}", "boolean", "true", single=True)), (880, y + 40))
     f.node("Demander le numéro", "n8n-nodes-base.telegram", 1.2, tg_text(
@@ -490,12 +513,21 @@ if (ctx.intent === 'periodes') {
 // Deux boutons par ligne : lisible sur un téléphone.
 const rows = [];
 for (let i = 0; i < buttons.length; i += 2) rows.push({ row: { buttons: buttons.slice(i, i + 2) } });
-return [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows } } }];"""}, (2420, y + 200))
-    f.node("Proposer les choix", "n8n-nodes-base.telegram", 1.2, tg_text(
-        "={{ $json.chat_id }}", "={{ $json.text }}",
-        replyMarkup="inlineKeyboard", inlineKeyboard="={{ $json.keyboard }}",
-    ), (2640, y + 200), credentials=TELEGRAM_CRED, **RETRY,
-       notes="Le clavier est construit par le nœud précédent : autant de boutons que de clients.")
+// Format natif de l'API Telegram, envoyé tel quel par le nœud HTTP suivant.
+const inline_keyboard = [];
+for (let i = 0; i < buttons.length; i += 2) {
+  inline_keyboard.push(buttons.slice(i, i + 2).map((b) => ({ text: b.text, callback_data: b.additionalFields.callback_data })));
+}
+return [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows }, reply_markup: inline_keyboard.length ? { inline_keyboard } : undefined } }];"""}, (2420, y + 200))
+    f.node("Proposer les choix", "n8n-nodes-base.httpRequest", 4.2, {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": True, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, reply_markup: $json.reply_markup }) }}",
+        "options": {"timeout": 30000},
+    }, (2640, y + 200), **RETRY,
+       notes="Appel direct à l'API Telegram : le nœud Telegram n'accepte pas un clavier calculé (n8n 2.39). "
+             "Le token vient de la variable d'environnement TELEGRAM_BOT_TOKEN : jamais écrit ici.")
     # statut / clients
     f.node("Derniers rapports", "n8n-nodes-base.httpRequest", 4.2, http(
         "GET", f"{BACKEND}/bot/reviews",
@@ -527,7 +559,10 @@ return [{ json: { chat_id: ctx.chat_id, text, keyboard: { rows } } }];"""}, (242
     f.link("Contact partagé ?", "Vérifier l'utilisateur", 1)
     f.link("Lier le compte", "Confirmer la liaison", 0)
     f.link("Lier le compte", "Portail indisponible", 1)
-    f.link("Vérifier l'utilisateur", "Utilisateur reconnu ?")
+    f.link("Vérifier l'utilisateur", "Nouveau message ?")
+    f.link("Nouveau message ?", "Utilisateur reconnu ?", 0)
+    f.link("Test manuel", "Exemple de message")
+    f.link("Exemple de message", "Extraire le message")
     f.link("Utilisateur reconnu ?", "Commande ou texte libre ?", 0)
     f.link("Utilisateur reconnu ?", "Demander le numéro", 1)
     f.link("Commande ou texte libre ?", "Lire la commande", 0)
