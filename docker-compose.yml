@@ -10,7 +10,7 @@ name: adgi360
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     container_name: adgi360-postgres
     restart: unless-stopped
     environment:
@@ -28,7 +28,9 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    # MinIO ne publie plus d'images (Docker Hub et quay.io fermés fin 2025).
+    # pgsty/minio est le fork communautaire maintenu, qui embarque aussi mc.
+    image: pgsty/minio:RELEASE.2026-06-18T00-00-00Z
     container_name: adgi360-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -48,7 +50,7 @@ services:
 
   # Crée le bucket au premier démarrage, puis s'arrête.
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: pgsty/minio:RELEASE.2026-06-18T00-00-00Z   # même image : contient mc
     container_name: adgi360-minio-init
     depends_on:
       minio:
