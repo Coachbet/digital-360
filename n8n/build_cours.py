@@ -265,11 +265,11 @@ HELP = (
     "« fais-moi le rapport de Maison Boréale pour septembre »"
 )
 
-LLM_PROMPT = """=Tu es l'assistant Telegram de Digital 360, une plateforme de rapports marketing pour agences.
-Classe la demande de l'utilisateur.
+# Prompt système : rôle, intentions possibles, format de sortie imposé.
+LLM_SYSTEM = """=Tu es l'assistant Telegram de Digital 360, une plateforme de rapports marketing pour agences.
+Ta seule tâche : classer la demande de l'utilisateur. Tu ne réponds jamais directement à sa question.
 
 Date du jour : {{ $now.toFormat('yyyy-MM-dd') }}
-Message : \"\"\"{{ $json.text }}\"\"\"
 
 Intentions possibles :
 - "rapport" : il veut générer un rapport de performance pour un client
@@ -282,6 +282,9 @@ Réponds UNIQUEMENT avec un objet JSON de cette forme :
 
 Pour « le mois dernier » ou un nom de mois, calcule la période à partir de la date du jour.
 N'invente jamais de nom de client : recopie celui du message."""
+
+# Message utilisateur : uniquement le texte reçu.
+LLM_PROMPT = """=Message : \"\"\"{{ $json.text }}\"\"\""""
 
 
 def bot_telegram():
@@ -422,6 +425,7 @@ return [{ json: {
     f.node("Comprendre la demande (IA)", "@n8n/n8n-nodes-langchain.chainLlm", 1.4, {
         "promptType": "define",
         "text": LLM_PROMPT,
+        "messages": {"messageValues": [{"message": LLM_SYSTEM}]},
     }, (1320, y + 100), onError="continueErrorOutput", **RETRY,
        notes="Transforme une phrase libre en commande. Si Ollama est hors ligne, le bot propose les commandes au lieu de planter.")
     f.node("Ollama", "@n8n/n8n-nodes-langchain.lmChatOllama", 1, {
